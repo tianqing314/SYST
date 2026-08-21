@@ -122,35 +122,6 @@ internal sealed class ConST811AOps
 }
 
 /// <summary>
-/// SN写入。PORT: 旧脚本方法 TestDeviceWriteSN（JSON Entry: TestDeviceWriteSN）。
-/// </summary>
-public sealed class TestDeviceWriteSNConST811AHandler : IStepHandler
-{
-    /// <summary>处理的测试项类型。</summary>
-    public string Kind => "TestDeviceWriteSN";
-    /// <summary>限定设备家族（仅 ConST811A 的板使用）。</summary>
-    public string? DeviceFamily => "ConST811A_LLP_Machine";
-
-    /// <summary>执行本测试项。</summary>
-    /// <param name="ctx">测试项上下文。</param>
-    /// <param name="ct">取消令牌。</param>
-    /// <returns>测试项结果。</returns>
-    public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
-    {
-        var op = new ConST811AOps(ctx, ct);
-        var pass = true;
-        // 优先取步骤「写入SN」参数（旧脚本默认值），为空时用号位 SN（UI 输入/自动生成）
-        var requestedSn = ctx.Parameter("写入SN")?.Value?.Trim();
-        if (string.IsNullOrWhiteSpace(requestedSn)) requestedSn = ctx.SerialNumber ?? "";
-        if (string.IsNullOrWhiteSpace(requestedSn)) pass = false;
-        else pass &= await op.Dut.SetSerialNumberAsync(requestedSn, ct);
-        if (pass) ctx.SerialNumber = await op.Dut.ReadSerialNumberAsync(ct);
-        op.Report(pass ? "✓ SN写入通过" : "✗ SN写入未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
-        return pass ? StepResult.Pass("SN写入通过") : StepResult.Fail("SN写入未通过");
-    }
-}
-
-/// <summary>
 /// 设备类型写入。PORT: 旧脚本方法 TestDeviceWriteType（JSON Entry: TestDeviceWriteType）。
 /// </summary>
 public sealed class TestDeviceWriteTypeConST811AHandler : IStepHandler

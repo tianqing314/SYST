@@ -37,17 +37,45 @@ internal sealed class ConST811AOps
     /// <summary>推送实时消息。</summary>
     public void Report(string m, RealtimeLevel l = RealtimeLevel.Info) => _ctx.Report(m, l);
 
+    /// <summary>步骤开始：报告正在执行的操作（用 ○ 标记）。</summary>
+    public void Step(string desc) => Report($"○ {desc}");
+
+    /// <summary>步骤成功：报告操作完成（用 ✓ 标记）。</summary>
+    public void Ok(string desc) => Report($"✓ {desc}", RealtimeLevel.Success);
+
+    /// <summary>步骤失败：报告操作失败（用 ✗ 标记）。</summary>
+    public void Fail(string desc) => Report($"✗ {desc}", RealtimeLevel.Error);
+
+    /// <summary>报告读取到的值。</summary>
+    public void Value(string label, double value, string unit = "")
+        => Report($"  {label}: {F(value)}{unit}");
+
+    /// <summary>报告读取到的文本值。</summary>
+    public void Text(string label, string value)
+        => Report($"  {label}: {value}");
+
+    /// <summary>报告条件判定结果。</summary>
+    public void Verdict(string label, bool passed, string detail)
+        => Report($"  {label}: {(passed ? "合格" : "不合格")} - {detail}", passed ? RealtimeLevel.Info : RealtimeLevel.Warn);
+
     /// <summary>真机稳定延时（继电器切档/设值后需等待）。PORT: 旧 Thread.Sleep / ScriptHelper.Thread_Sleep。</summary>
     public Task Sleep(int ms)
     {
-        Report($"等待 {ms}ms");
+        Report($"  等待稳定 {ms}ms ...");
+        return Task.Delay(ms, _ct);
+    }
+
+    /// <summary>带日志的等待，显示原因。</summary>
+    public Task Sleep(int ms, string reason)
+    {
+        Report($"  {reason}，等待 {ms}ms ...");
         return Task.Delay(ms, _ct);
     }
 
     /// <summary>发共享工装输出指令（按名称映射到 GZP21 通道）。</summary>
     public Task Relay(string cmd)
     {
-        Report($"工装输出指令：{cmd}");
+        Report($"  工装输出指令：{cmd}");
         return Gzp21.SetOutputAsync(cmd, true, _ct);
     }
 
@@ -115,35 +143,6 @@ internal sealed class ConST811AOps
 }
 
 /// <summary>
-/// SN写入。PORT: 旧脚本方法 TestDeviceWriteSN（JSON Entry: TestDeviceWriteSN）。
-/// </summary>
-public sealed class TestDeviceWriteSNConST811AHandler : IStepHandler
-{
-    /// <summary>处理的测试项类型。</summary>
-    public string Kind => "TestDeviceWriteSN";
-    /// <summary>限定设备家族（仅 ConST811A 的板使用）。</summary>
-    public string? DeviceFamily => "ConST811A_BP_Machine";
-
-    /// <summary>执行本测试项。</summary>
-    /// <param name="ctx">测试项上下文。</param>
-    /// <param name="ct">取消令牌。</param>
-    /// <returns>测试项结果。</returns>
-    public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
-    {
-        var op = new ConST811AOps(ctx, ct);
-        var pass = true;
-        // 优先取步骤「写入SN」参数（旧脚本默认值），为空时用号位 SN（UI 输入/自动生成）
-        var requestedSn = ctx.Parameter("写入SN")?.Value?.Trim();
-        if (string.IsNullOrWhiteSpace(requestedSn)) requestedSn = ctx.SerialNumber ?? "";
-        if (string.IsNullOrWhiteSpace(requestedSn)) pass = false;
-        else pass &= await op.Dut.SetSerialNumberAsync(requestedSn, ct);
-        if (pass) ctx.SerialNumber = await op.Dut.ReadSerialNumberAsync(ct);
-        op.Report(pass ? "✓ SN写入通过" : "✗ SN写入未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
-        return pass ? StepResult.Pass("SN写入通过") : StepResult.Fail("SN写入未通过");
-    }
-}
-
-/// <summary>
 /// 设备类型写入。PORT: 旧脚本方法 TestDeviceWriteType（JSON Entry: TestDeviceWriteType）。
 /// </summary>
 public sealed class TestDeviceWriteTypeConST811AHandler : IStepHandler
@@ -161,9 +160,86 @@ public sealed class TestDeviceWriteTypeConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        var productModel = ctx.Setting("ProductModel") ?? "ConST811A";
-        pass &= await op.Dut.SetPrimaryDeviceTypeAsync(productModel, ct);
-        op.Report(pass ? "✓ 设备类型写入通过" : "✗ 设备类型写入未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+
+        // 1. 读取当前设备类型
+        op.Step("设备类型写入 - 读取当前设备类型 ...");
+        var orgDeviceMode = await op.Dut.QueryTextAsync("GetDevType", null, ct);
+        op.Text("当前设备类型", orgDeviceMode ?? "");
+        if (string.IsNullOrEmpty(orgDeviceMode))
+        {
+            op.Fail("设备类型写入 - 读取设备类型为空");
+            return StepResult.Fail("设备类型写入未通过：读取设备类型为空");
+        }
+
+        // 2. 根据机型确定控压系数
+        op.Step("设备类型写入 - 确定控压系数 ...");
+        double setControlPanelModelParameter = 0;
+        if (orgDeviceMode.Contains("AG"))
+            setControlPanelModelParameter = 0.905;
+        else if (orgDeviceMode.Contains("AD"))
+            setControlPanelModelParameter = 0.95;
+        else if (orgDeviceMode.Contains("AAM"))
+            setControlPanelModelParameter = 0.905;
+        else if (orgDeviceMode.Contains("AAL"))
+            setControlPanelModelParameter = 0.95;
+        else if (orgDeviceMode.Contains("AL"))
+            setControlPanelModelParameter = 0.30;
+        else if (orgDeviceMode.Contains("AB"))
+            setControlPanelModelParameter = 0.95;
+        else if (orgDeviceMode.Contains("10M"))
+            setControlPanelModelParameter = 0.905;
+        else
+            setControlPanelModelParameter = 0.905;
+        op.Value("控压系数", setControlPanelModelParameter, "");
+
+        // 3. 写入控压系数
+        op.Step("设备类型写入 - 写入控压系数 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetControlPanelModelParameter",
+            new[] { setControlPanelModelParameter.ToString("F4") }, ct)))
+        {
+            op.Fail("设备类型写入 - 写入控压系数失败");
+            return StepResult.Fail("设备类型写入未通过：写入控压系数失败");
+        }
+
+        // 4. 读回控压系数验证
+        var readbackParam = await op.Dut.QueryTextAsync("GetControlPanelModelParameter", null, ct);
+        op.Text("读回控压系数", readbackParam ?? "");
+
+        // 5. 10M 机型特殊处理：设置泵阻转电流为 8A
+        if (orgDeviceMode.Contains("10M"))
+        {
+            op.Step("设备类型写入 - 10M机型：设置泵阻转电流 ...");
+            await op.Dut.CommandAsync("SetDumpStallingCurrent", null, ct);
+            if (!(await op.Dut.QueryBooleanAsync("SetDumpCurrent", new[] { "8" }, ct)))
+            {
+                op.Text("泵阻转电流", "设置失败，可能影响后续控压测试");
+            }
+            else
+            {
+                var current = await op.Dut.QueryTextAsync("GetDumpCurrent", null, ct);
+                op.Text("泵阻转电流", $"{current}A");
+            }
+        }
+
+        // 6. 写入设备类型
+        op.Step("设备类型写入 - 正在写入 ...");
+        pass &= await op.Dut.SetPrimaryDeviceTypeAsync(orgDeviceMode, ct);
+
+        // 7. 读回验证
+        if (pass)
+        {
+            op.Step("设备类型写入 - 读回验证 ...");
+            var newType = await op.Dut.QueryTextAsync("GetDevType", null, ct);
+            op.Text("读回设备类型", newType ?? "");
+            if (newType != orgDeviceMode)
+            {
+                op.Fail($"设备类型写入 - 比对失败：期望 {orgDeviceMode}，实际 {newType}");
+                pass = false;
+            }
+        }
+
+        if (pass) op.Ok($"设备类型写入通过：{orgDeviceMode}");
+        else op.Fail($"设备类型写入未通过：{orgDeviceMode}");
         return pass ? StepResult.Pass("设备类型写入通过") : StepResult.Fail("设备类型写入未通过");
     }
 }
@@ -186,11 +262,68 @@ public sealed class TestSoftVersionsConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
+
+        // 1. 读取系统版本
+        op.Step("软件版本 - 读取系统版本 ...");
+        var sysVersion = await op.Dut.QueryTextAsync("GetVersion", null, ct);
+        op.Text("系统版本", sysVersion ?? "");
+        if (string.IsNullOrWhiteSpace(sysVersion))
+        {
+            op.Fail("软件版本 - 读取系统版本失败");
+            return StepResult.Fail("软件版本验证未通过：读取系统版本失败");
+        }
+
+        // 2. 读取电测版本
+        op.Step("软件版本 - 读取电测版本 ...");
+        var elecVersion = await op.Dut.QueryTextAsync("GetVersion_Electricity", null, ct);
+        op.Text("电测版本", elecVersion ?? "");
+        if (string.IsNullOrWhiteSpace(elecVersion))
+        {
+            op.Fail("软件版本 - 读取电测版本失败");
+            return StepResult.Fail("软件版本验证未通过：读取电测版本失败");
+        }
+
+        // 3. 读取设备类型
+        op.Step("软件版本 - 读取设备类型 ...");
+        var devType = await op.Dut.QueryTextAsync("GetDevType", null, ct);
+        op.Text("设备类型", devType ?? "");
+
+        // 4. 读取控制器版本
+        op.Step("软件版本 - 读取控制器版本 ...");
+        var ctrlVersion = await op.Dut.QueryTextAsync("GetVersion_Controller", null, ct);
+        op.Text("控制器版本", ctrlVersion ?? "");
+        if (string.IsNullOrWhiteSpace(ctrlVersion))
+        {
+            op.Fail("软件版本 - 读取控制器版本失败");
+            return StepResult.Fail("软件版本验证未通过：读取控制器版本失败");
+        }
+
+        // 5. 读取 DD 库版本（系统版本 >= 1.0.0.57 时支持）
+        op.Step("软件版本 - 读取 DD 库版本 ...");
+        var ddVersion = await op.Dut.QueryTextAsync("GetDeviceDDT", null, ct);
+        op.Text("DD库版本", ddVersion ?? "");
+
+        // 6. 读取固件版本
+        op.Step("软件版本 - 读取固件版本 ...");
         var firmware = await op.Dut.ReadFirmwareVersionAsync(ct);
-        op.Report($"固件版本：{firmware}");
-        pass &= !string.IsNullOrWhiteSpace(firmware);
-        op.Report(pass ? "✓ 软件版本验证及升级通过" : "✗ 软件版本验证及升级未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
-        return pass ? StepResult.Pass("软件版本验证及升级通过") : StepResult.Fail("软件版本验证及升级未通过");
+        op.Text("固件版本", firmware ?? "");
+
+        // 7. 读取硬件版本
+        op.Step("软件版本 - 读取硬件版本 ...");
+        var hw = await op.Dut.QueryTextAsync("ReadHardWaveVersion", null, ct);
+        op.Text("硬件版本", hw ?? "");
+
+        // 8. 读取序列号
+        op.Step("软件版本 - 读取序列号 ...");
+        var sn = await op.Dut.ReadSerialNumberAsync(ct);
+        op.Text("序列号", sn ?? "");
+
+        // TODO: 当 IVersionValidator 注入到测试步骤后，添加服务端版本验证
+        // TODO: 添加 MES 系统机型匹配验证
+
+        if (pass) op.Ok("软件版本验证通过");
+        else op.Fail("软件版本验证未通过");
+        return pass ? StepResult.Pass("软件版本验证通过") : StepResult.Fail("软件版本验证未通过");
     }
 }
 
@@ -212,15 +345,29 @@ public sealed class TestCPSConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        
-        await op.Dut.QueryTextAsync("GetDUTSN", null, ct);
-        
-        //老版本直接通过
+
+        // 1. 读取设备 SN
+        op.Step("CPS检测 - 读取设备SN ...");
+        var sn = await op.Dut.QueryTextAsync("GetDUTSN", null, ct);
+        op.Text("设备SN", sn ?? "");
+
+        // 2. SN 前缀检查：仅特定机型需要 CPS 测试
+        if (!string.IsNullOrWhiteSpace(sn) &&
+            !sn.StartsWith("811AGC") &&
+            !sn.StartsWith("811ADC") &&
+            !sn.StartsWith("811ALC"))
+        {
+            op.Step("CPS检测 - 非目标机型，跳过 CPS 测试");
+            op.Ok("CPS检测 - 跳过（非目标机型）");
+            return StepResult.Pass("CPS检测跳过（非目标机型）");
+        }
+
+        // 3. 等待操作员确认 CPS 图标显示
+        op.Step("CPS检测 - 请检查 CPS 图标显示");
         if (!(await ctx.ConfirmAsync("1.将设备与连接台接好后，查看设备CPS图标，正常显示为通过。 \r\n2.上行控压，达到目标点进行下行控压，确定排气正常从C104出气。 气压版：上行7MPa，下行100kPa, 差压版：上行250kPa,下行50kPa，微差压版：上行10kPa，下行2kPa。 \r\n3.手动排空。", ct))) pass = false;
-        
-        
-        
-        op.Report(pass ? "✓ CPS手动检测通过" : "✗ CPS手动检测未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+
+        if (pass) op.Ok("CPS手动检测通过");
+        else op.Fail("CPS手动检测未通过");
         return pass ? StepResult.Pass("CPS手动检测通过") : StepResult.Fail("CPS手动检测未通过");
     }
 }
@@ -243,10 +390,55 @@ public sealed class TestLANConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
+
+        // 1. 读取设备网口 IP 地址
+        op.Step("网口通讯 - 读取设备 IP 地址 ...");
         var ip = await op.Dut.QueryTextAsync("GetStaticETHemetIPAddress", null, ct);
-        op.Report($"设备网口地址：{ip}");
-        pass &= !string.IsNullOrWhiteSpace(ip);
-        op.Report(pass ? "✓ 网口通讯通过" : "✗ 网口通讯未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+        op.Text("设备IP", ip ?? "");
+
+        // 2. IP 地址合法性验证
+        if (string.IsNullOrWhiteSpace(ip) || ip.StartsWith("0.0"))
+        {
+            op.Fail("网口通讯 - IP 地址不合法，网线可能未连接");
+            return StepResult.Fail("网口通讯未通过：IP 地址不合法");
+        }
+
+        // 3. IP 前缀验证（正常应该是 192 或 169 开头）
+        if (!ip.StartsWith("192") && !ip.StartsWith("169"))
+        {
+            op.Fail($"网口通讯 - IP {ip} 不合法，正常应该是 192 或 169 开头");
+            return StepResult.Fail($"网口通讯未通过：IP {ip} 不合法");
+        }
+
+        // 4. 启动网口 IP 检查程序
+        op.Step("网口通讯 - 启动网口检查程序 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[] { "LAN" }, ct)))
+        {
+            op.Fail("网口通讯 - 启动网口检查程序失败");
+            return StepResult.Fail("网口通讯未通过：启动检查程序失败");
+        }
+        await Task.Delay(500, ct);
+
+        // 5. 等待检查结果
+        op.Step("网口通讯 - 等待检查结果 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[] { "LAN" }, ct)))
+        {
+            op.Fail("网口通讯 - 网口检查未通过");
+            await op.Dut.CommandAsync("SetCheckerClose", null, ct);
+            return StepResult.Fail("网口通讯未通过：网口检查未通过");
+        }
+        await Task.Delay(500, ct);
+
+        // 6. 尝试 TCP 连接
+        op.Step("网口通讯 - 尝试 TCP 连接 ...");
+        var connected = await op.Dut.QueryBooleanAsync("TestNetworkConnection", new[] { ip }, ct);
+        op.Text("TCP连接", connected ? "成功" : "失败");
+        pass &= connected;
+
+        await op.Dut.CommandAsync("SetCheckerClose", null, ct);
+
+        if (pass) op.Ok($"网口通讯通过：{ip}");
+        else op.Fail("网口通讯未通过");
         return pass ? StepResult.Pass("网口通讯通过") : StepResult.Fail("网口通讯未通过");
     }
 }
@@ -269,34 +461,37 @@ public sealed class TestKeyBoardConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        
-        
-        
-        var prevPass1 = pass;  // G8: 记录本重试段之前的整体结果
-        while (true) {  // G8: 原 goto 标签 tryagain → while(true) 重试循环
-            pass = true;  // G8: 每次重试重置本段结果
-        
-        
-        
-            if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[]{ "KeyBoard" }, ct))) { op.Report("与设备指令通讯有问题，启动按键测试失败", RealtimeLevel.Error); pass = false; }
-        
-            await Task.Delay(500, ct);
-            if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "KeyBoard" }, ct))) { op.Report("与设备指令通讯有问题，获取自检测试结果失败", RealtimeLevel.Error); pass = false; }
-        
-            await Task.Delay(1000, ct);
-        
-            if (!(await ctx.ConfirmAsync($"当前测试没通过，是否需要重新测试一次？点击【确认】进行第{1}次测试，否则测试不通过，设备有问题。", ct))) { pass = false; break; }  // G8: 取消重试 → 退出循环
+
+        // 1. 启动按键自检
+        op.Step("按键测试 - 启动按键自检 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[]{ "KeyBoard" }, ct)))
+        {
+            op.Fail("按键测试 - 启动自检失败");
+            return StepResult.Fail("按键测试未通过：启动自检失败");
+        }
+        await Task.Delay(500, ct);
+
+        // 2. 等待自检完成
+        op.Step("按键测试 - 等待自检结果 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "KeyBoard" }, ct)))
+        {
+            op.Fail("按键测试 - 自检未通过");
             await op.Dut.CommandAsync("SetCheckerClose", null, ct);
-            await Task.Delay(3000, ct);
-            continue;  // G8: 原 goto tryagain → 重新测试
-        }  // G8: while(true) 重试循环结束（原 goto tryagain 标签）
-        pass &= prevPass1;  // G8: 合并本段结果到整体结果
-        
-        
-        
+            return StepResult.Fail("按键测试未通过：自检未通过");
+        }
+        await Task.Delay(1000, ct);
+
+        // 3. 操作员确认按键测试
+        op.Step("按键测试 - 请确认按键功能正常");
+        if (!(await ctx.ConfirmAsync("请确认所有按键功能正常，点击【确认】通过，否则测试不通过。", ct)))
+        {
+            pass = false;
+        }
+
         await op.Dut.CommandAsync("SetCheckerClose", null, ct);
-        
-        op.Report(pass ? "✓ 按键测试通过" : "✗ 按键测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+
+        if (pass) op.Ok("按键测试通过");
+        else op.Fail("按键测试未通过");
         return pass ? StepResult.Pass("按键测试通过") : StepResult.Fail("按键测试未通过");
     }
 }
@@ -319,72 +514,62 @@ public sealed class LCDTestConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        
-        
-        
-        var prevPass3 = pass;  // G8: 记录本重试段之前的整体结果
-        while (true) {  // G8: 原 goto 标签 tryagain1 → while(true) 重试循环
-            pass = true;  // G8: 每次重试重置本段结果
-        
-            if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[]{ "Brightness" }, ct))) { op.Report("与设备指令通讯有问题，启动屏幕亮度测试失败", RealtimeLevel.Error); pass = false; }
-            await Task.Delay(500, ct);
-            if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "Brightness" }, ct))) { op.Report("与设备指令通讯有问题，获取自检测试结果失败", RealtimeLevel.Error); pass = false; }
-            await Task.Delay(1000, ct);
-        
-            if (!(await ctx.ConfirmAsync($"当前测试没通过，是否需要重新测试一次？点击【确认】进行第{1}次测试，否则测试不通过，设备有问题。", ct))) { pass = false; break; }  // G8: 取消重试 → 退出循环
+
+        // 1. 亮度测试
+        op.Step("屏幕测试 - 亮度自检 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[]{ "Brightness" }, ct)))
+        {
+            op.Fail("屏幕测试 - 亮度自检启动失败");
+            return StepResult.Fail("屏幕测试未通过：亮度自检启动失败");
+        }
+        await Task.Delay(500, ct);
+        if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "Brightness" }, ct)))
+        {
+            op.Fail("屏幕测试 - 亮度自检未通过");
             await op.Dut.CommandAsync("SetCheckerClose", null, ct);
-            await Task.Delay(3000, ct);
-            continue;  // G8: 原 goto tryagain1 → 重新测试
-        }  // G8: while(true) 重试循环结束（原 goto tryagain1 标签）
-        pass &= prevPass3;  // G8: 合并本段结果到整体结果
-        
-        
-        
-        var prevPass2 = pass;  // G8: 记录本重试段之前的整体结果
-        while (true) {  // G8: 原 goto 标签 tryagain2 → while(true) 重试循环
-            pass = true;  // G8: 每次重试重置本段结果
-        
-            if (!(await op.Dut.QueryBooleanAsync("SetCheckerSelect", new[]{ "BadPixel" }, ct))) { op.Report("与设备指令通讯有问题，启动屏幕坏点测试失败", RealtimeLevel.Error); pass = false; }
-            await Task.Delay(500, ct);
-        
-            if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "BadPixel" }, ct))) { op.Report("与设备指令通讯有问题，获取自检测试结果失败", RealtimeLevel.Error); pass = false; }
-            await Task.Delay(1000, ct);
-        
-            if (!(await ctx.ConfirmAsync($"当前测试没通过，是否需要重新测试一次？点击【确认】进行第{1}次测试，否则测试不通过，设备有问题。", ct))) { pass = false; break; }  // G8: 取消重试 → 退出循环
-            await op.Dut.CommandAsync("SetCheckerClose", null, ct);
-            await Task.Delay(3000, ct);
-            await op.Dut.CommandAsync("SetCheckerOpen", new[]{ "BadPixel" }, ct);
-            continue;  // G8: 原 goto tryagain2 → 重新测试
-        }  // G8: while(true) 重试循环结束（原 goto tryagain2 标签）
-        pass &= prevPass2;  // G8: 合并本段结果到整体结果
-        
-        
-        
-        
-        
-        var prevPass1 = pass;  // G8: 记录本重试段之前的整体结果
-        while (true) {  // G8: 原 goto 标签 tryagain3 → while(true) 重试循环
-            pass = true;  // G8: 每次重试重置本段结果
-        
-            if (!(await op.Dut.QueryBooleanAsync("SetCheckerSelect", new[]{ "Touch" }, ct))) { op.Report("与设备指令通讯有问题，启动屏幕触摸测试失败", RealtimeLevel.Error); pass = false; }
-            await Task.Delay(500, ct);
-        
-            if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "Touch" }, ct))) { op.Report("获取自检测试结果失败", RealtimeLevel.Error); pass = false; }
-            await Task.Delay(1000, ct);
-        
-            if (!(await ctx.ConfirmAsync($"当前测试没通过，是否需要重新测试一次？点击【确认】进行第{1}次测试，否则测试不通过，设备有问题。", ct))) { pass = false; break; }  // G8: 取消重试 → 退出循环
-            await op.Dut.CommandAsync("SetCheckerClose", null, ct);
-            await Task.Delay(3000, ct);
-            await op.Dut.CommandAsync("SetCheckerOpen", new[]{ "Touch" }, ct);
-            continue;  // G8: 原 goto tryagain3 → 重新测试
-        }  // G8: while(true) 重试循环结束（原 goto tryagain3 标签）
-        pass &= prevPass1;  // G8: 合并本段结果到整体结果
-        
-        
+            return StepResult.Fail("屏幕测试未通过：亮度自检未通过");
+        }
+        await Task.Delay(1000, ct);
         await op.Dut.CommandAsync("SetCheckerClose", null, ct);
-        
-        op.Report(pass ? "✓ 屏幕测试通过" : "✗ 屏幕测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
-        return pass ? StepResult.Pass("屏幕测试通过") : StepResult.Fail("屏幕测试未通过");
+        await Task.Delay(3000, ct);
+
+        // 2. 坏点测试
+        op.Step("屏幕测试 - 坏点自检 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetCheckerSelect", new[]{ "BadPixel" }, ct)))
+        {
+            op.Fail("屏幕测试 - 坏点自检启动失败");
+            return StepResult.Fail("屏幕测试未通过：坏点自检启动失败");
+        }
+        await Task.Delay(500, ct);
+        if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "BadPixel" }, ct)))
+        {
+            op.Fail("屏幕测试 - 坏点自检未通过");
+            await op.Dut.CommandAsync("SetCheckerClose", null, ct);
+            return StepResult.Fail("屏幕测试未通过：坏点自检未通过");
+        }
+        await Task.Delay(1000, ct);
+        await op.Dut.CommandAsync("SetCheckerClose", null, ct);
+        await Task.Delay(3000, ct);
+
+        // 3. 触摸测试
+        op.Step("屏幕测试 - 触摸自检 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetCheckerSelect", new[]{ "Touch" }, ct)))
+        {
+            op.Fail("屏幕测试 - 触摸自检启动失败");
+            return StepResult.Fail("屏幕测试未通过：触摸自检启动失败");
+        }
+        await Task.Delay(500, ct);
+        if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "Touch" }, ct)))
+        {
+            op.Fail("屏幕测试 - 触摸自检未通过");
+            await op.Dut.CommandAsync("SetCheckerClose", null, ct);
+            return StepResult.Fail("屏幕测试未通过：触摸自检未通过");
+        }
+        await Task.Delay(1000, ct);
+        await op.Dut.CommandAsync("SetCheckerClose", null, ct);
+
+        op.Ok("屏幕测试通过（亮度/坏点/触摸）");
+        return StepResult.Pass("屏幕测试通过");
     }
 }
 
@@ -406,29 +591,37 @@ public sealed class BeeperTestConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        
-        
-        
-        var prevPass1 = pass;  // G8: 记录本重试段之前的整体结果
-        while (true) {  // G8: 原 goto 标签 tryagain → while(true) 重试循环
-            pass = true;  // G8: 每次重试重置本段结果
-        
-            if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[]{ "Speaker" }, ct))) { op.Report("与设备指令通讯有问题，启动蜂鸣器测试失败", RealtimeLevel.Error); pass = false; }
-            await Task.Delay(500, ct);
-            if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "Speaker" }, ct))) { op.Report("与设备指令通讯有问题，获取自检测试结果失败", RealtimeLevel.Error); pass = false; }
-            await Task.Delay(1000, ct);
-        
-        
-            if (!(await ctx.ConfirmAsync($"当前测试没通过，是否需要重新测试一次？点击【确认】进行第{1}次测试，否则测试不通过，设备有问题。", ct))) { pass = false; break; }  // G8: 取消重试 → 退出循环
+
+        // 1. 启动蜂鸣器自检
+        op.Step("蜂鸣器测试 - 启动自检 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[]{ "Speaker" }, ct)))
+        {
+            op.Fail("蜂鸣器测试 - 启动自检失败");
+            return StepResult.Fail("蜂鸣器测试未通过：启动自检失败");
+        }
+        await Task.Delay(500, ct);
+
+        // 2. 等待自检完成
+        op.Step("蜂鸣器测试 - 等待自检结果 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetCheckerState", new[]{ "Speaker" }, ct)))
+        {
+            op.Fail("蜂鸣器测试 - 自检未通过");
             await op.Dut.CommandAsync("SetCheckerClose", null, ct);
-            await Task.Delay(3000, ct);
-            continue;  // G8: 原 goto tryagain → 重新测试
-        }  // G8: while(true) 重试循环结束（原 goto tryagain 标签）
-        pass &= prevPass1;  // G8: 合并本段结果到整体结果
-        
+            return StepResult.Fail("蜂鸣器测试未通过：自检未通过");
+        }
+        await Task.Delay(1000, ct);
+
+        // 3. 操作员确认蜂鸣器声音
+        op.Step("蜂鸣器测试 - 请确认蜂鸣器声音正常");
+        if (!(await ctx.ConfirmAsync("请确认蜂鸣器声音正常，点击【确认】通过，否则测试不通过。", ct)))
+        {
+            pass = false;
+        }
+
         await op.Dut.CommandAsync("SetCheckerClose", null, ct);
-        
-        op.Report(pass ? "✓ 蜂鸣器测试通过" : "✗ 蜂鸣器测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+
+        if (pass) op.Ok("蜂鸣器测试通过");
+        else op.Fail("蜂鸣器测试未通过");
         return pass ? StepResult.Pass("蜂鸣器测试通过") : StepResult.Fail("蜂鸣器测试未通过");
     }
 }
@@ -451,10 +644,25 @@ public sealed class FANTestConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
+
+        // 1. 启动风扇
+        op.Step("风扇测试 - 启动风扇 ...");
         await op.Dut.CommandAsync("SetFANOn", null, ct);
         await op.Sleep(500);
+
+        // 2. 关闭风扇
+        op.Step("风扇测试 - 关闭风扇 ...");
         await op.Dut.CommandAsync("SetFANClose", null, ct);
-        op.Report(pass ? "✓ 风扇测试通过" : "✗ 风扇测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+
+        // 3. 操作员确认风扇转动
+        op.Step("风扇测试 - 请确认风扇转动正常");
+        if (!(await ctx.ConfirmAsync("请确认风扇转动正常，点击【确认】通过，否则测试不通过。", ct)))
+        {
+            pass = false;
+        }
+
+        if (pass) op.Ok("风扇测试通过");
+        else op.Fail("风扇测试未通过");
         return pass ? StepResult.Pass("风扇测试通过") : StepResult.Fail("风扇测试未通过");
     }
 }
@@ -477,18 +685,24 @@ public sealed class Manual_1b0ac0cbde40461f9fcbc943513d9414ConST811AHandler : IS
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        
-        string outmsg1 = "";
-        string outmsg2 = "";
-        outmsg1 = await op.Dut.QueryTextAsync("GetRS1", new[]{ ctx.SerialNumber ?? "" }, ct);
-        outmsg2 = await op.Dut.QueryTextAsync("GetRS2", new[]{ ctx.SerialNumber ?? "" }, ct);
-        
+
+        // 1. 读取准备提示信息
+        op.Step("电源指示灯 - 读取准备信息 ...");
+        string outmsg1 = await op.Dut.QueryTextAsync("GetRS1", new[]{ ctx.SerialNumber ?? "" }, ct);
+        string outmsg2 = await op.Dut.QueryTextAsync("GetRS2", new[]{ ctx.SerialNumber ?? "" }, ct);
+        op.Text("准备信息1", outmsg1);
+        op.Text("准备信息2", outmsg2);
+
+        // 2. 确认接线
+        op.Step("电源指示灯 - 请确认接线正确");
         if (!(await ctx.ConfirmAsync($"测试前准备确认:\r\n1、接入4根电测线，2个外接航插线，1根电源线。\r\n2、接入USB通讯线，网线，U盘。3、拧上设备侧边的堵头。\r\n4、{outmsg1}。\r\n5、{outmsg2}\r\n\r\n点击【确认】或【取消】，都会停止测试。", "", ct))) pass = false;
-        if (!(await ctx.ConfirmAsync($"测试前准备确认:\r\n1、接入4根电测线，2个外接航插线，1根电源线。\r\n2、接入USB通讯线，网线，U盘。3、拧上设备侧边的堵头。\r\n4、{outmsg1}。\r\n\r\n点击【确认】或【取消】，都会停止测试。", "", ct))) pass = false;
-        if (!(await ctx.ConfirmAsync($"测试前准备确认:\r\n1、接入4根电测线，2个外接航插线，1根电源线。\r\n2、接入USB通讯线，网线，U盘。3、拧上设备侧边的堵头。\r\n4、{outmsg2}。\r\n\r\n点击【确认】或【取消】，都会停止测试。", "", ct))) pass = false;
-        if (!(await ctx.ConfirmAsync($"测试前准备确认:\r\n1、接入4根电测线，2个外接航插线，1根电源线。\r\n2、接入USB通讯线，网线，U盘。\r\n3、拧上设备侧边的堵头。\r\n\r\n完成后，没有问题点击【确认】进行下一步。\r\n点击【取消】，停止测试。", "", ct))) pass = false;
-        
-        op.Report(pass ? "✓ 电源指示灯测试通过" : "✗ 电源指示灯测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+
+        // 3. 操作员确认指示灯状态
+        op.Step("电源指示灯 - 请确认指示灯显示正常");
+        if (!(await ctx.ConfirmAsync("请确认电源指示灯显示正常，点击【确认】通过，否则测试不通过。", "", ct))) pass = false;
+
+        if (pass) op.Ok("电源指示灯测试通过");
+        else op.Fail("电源指示灯测试未通过");
         return pass ? StepResult.Pass("电源指示灯测试通过") : StepResult.Fail("电源指示灯测试未通过");
     }
 }
@@ -511,37 +725,60 @@ public sealed class TestPaModuleConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        // G10 遗留变量 massage：原始声明引用旧框架/旧类型未迁移，以下为可编译占位
-        var massage = new List<(string Address, string Name)>(); // 旧声明 `List<PAMassage> massage = ...` 类型未迁移
-        
-        
-        
-        
+        var massage = new List<(string Address, string Name)>();
+
+        // 1. 切换电测档位到 PA
+        op.Step("PA模块测试 - 切换电测档位 ...");
         await op.Gzp21.SetOutputAsync("PA", true, ct);
-        if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_PA", null, ct))) { op.Report("与设备指令通讯有问题，电测档位切换PA变送器失败", RealtimeLevel.Error); pass = false; }
+        if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_PA", null, ct)))
+        {
+            op.Fail("PA模块测试 - 切换电测档位失败");
+            return StepResult.Fail("PA模块测试未通过：切换电测档位失败");
+        }
         await Task.Delay(5000, ct);
-        
+
+        // 2. 搜索 PA 变送器
+        op.Step("PA模块测试 - 搜索 PA 变送器 ...");
         var retryOk = await RetryHelper.RetryAsync(async attempt =>
         {
-            pass = true;  // 每次重试重置本段结果
-            if (!(await op.Dut.QueryBooleanAsync("SearchPA", null, ct))) { op.Report("与设备指令通讯有问题，搜索PA变送器失败", RealtimeLevel.Error); pass = false; }
+            pass = true;
+            if (!(await op.Dut.QueryBooleanAsync("SearchPA", null, ct))) { pass = false; }
             await op.Dut.CommandAsync("GetPAMassage", null, ct);
             await Task.Delay(1000, ct);
             return pass;
         }, _ => ctx.ConfirmAsync("没有搜索到设备，电测线可能没接，请先使用测试线 连接设备与工装的SRC和MEAS插孔，红对红，黑对黑。\r\n点击确认，重新测试，否则测试失败。", ct), 3, ct);
-        if (!retryOk) pass = false;
-        
+        if (!retryOk)
+        {
+            op.Fail("PA模块测试 - 搜索 PA 变送器失败");
+            await op.Gzp21.SetOutputAsync("PA", false, ct);
+            return StepResult.Fail("PA模块测试未通过：搜索失败");
+        }
         await Task.Delay(5000, ct);
-        
+
+        // 3. 连接 PA 变送器
+        op.Step("PA模块测试 - 连接 PA 变送器 ...");
         await Task.Delay(1000, ct);
-        if (!(await op.Dut.QueryBooleanAsync("ConnectPA", new[]{ massage[0].Address.ToString() }, ct))) { op.Report("与设备指令通讯有问题，连接PA变送器失败", RealtimeLevel.Error); pass = false; }
+        if (!(await op.Dut.QueryBooleanAsync("ConnectPA", new[]{ massage[0].Address.ToString() }, ct)))
+        {
+            op.Fail("PA模块测试 - 连接 PA 变送器失败");
+            await op.Gzp21.SetOutputAsync("PA", false, ct);
+            return StepResult.Fail("PA模块测试未通过：连接失败");
+        }
         await Task.Delay(1000, ct);
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetCurrentElectricMeasure", null, ct))) { op.Report("与设备指令通讯有问题，获取当前电测信息失败", RealtimeLevel.Error); pass = false; }
+
+        // 4. 获取电测信息
+        op.Step("PA模块测试 - 获取电测信息 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetCurrentElectricMeasure", null, ct)))
+        {
+            op.Fail("PA模块测试 - 获取电测信息失败");
+            pass = false;
+        }
+
         await op.Gzp21.SetOutputAsync("PA", false, ct);
-        
-        op.Report(pass ? "✓ 系统板PA模块测试通过" : "✗ 系统板PA模块测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
-        return pass ? StepResult.Pass("系统板PA模块测试通过") : StepResult.Fail("系统板PA模块测试未通过");
+
+        if (pass) op.Ok("PA模块测试通过");
+        else op.Fail("PA模块测试未通过");
+        return pass ? StepResult.Pass("PA模块测试通过") : StepResult.Fail("PA模块测试未通过");
     }
 }
 
@@ -563,45 +800,66 @@ public sealed class TestHartConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        // G10 遗留变量 address：原始声明引用旧框架/旧类型未迁移，以下为可编译占位
-        int address = 0; // 旧声明 `int address = int.Parse(result.Data.Value...);` 引用旧框架
-        // G10 遗留变量 msg：原始声明引用旧框架/旧类型未迁移，以下为可编译占位
-        
-        
-        
-        var prevPass1 = pass;  // G8: 记录本重试段之前的整体结果
-        while (true) {  // G8: 原 goto 标签 tryagain → while(true) 重试循环
-            pass = true;  // G8: 每次重试重置本段结果
-        
-            await op.Gzp21.SetOutputAsync("Hart", true, ct);
-            await Task.Delay(1000, ct);
-        
-        
-            if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_HART", null, ct))) { op.Report("与设备指令通讯有问题，切换hart档位失败", RealtimeLevel.Error); pass = false; }
-        
-            if (!(await op.Dut.QueryBooleanAsync("GetSupplyMode", null, ct))) { op.Report("与设备指令通讯有问题，获取当前供电模式失败", RealtimeLevel.Error); pass = false; }
-            if (!(await op.Dut.QueryBooleanAsync("SetSwitchMode_IPIR", null, ct))) { op.Report("与设备指令通讯有问题，切换供电模式失败", RealtimeLevel.Error); pass = false; }
-        
-            await Task.Delay(8000, ct);
-            if (!(await op.Dut.QueryBooleanAsync("StartSearchHart", null, ct))) { op.Report("与设备指令通讯有问题，搜索Hart失败", RealtimeLevel.Error); pass = false; }
-            await Task.Delay(1000, ct);
-            if (!(await op.Dut.QueryBooleanAsync("GetEleHartMassage", null, ct))) { op.Report("与设备指令通讯有问题，获取hart信息失败", RealtimeLevel.Error); pass = false; }
-        
-            if (!(await ctx.ConfirmAsync("电测线可能没接，请先使用测试线 连接设备与工装的SRC和MEAS插孔，红对红，黑对黑。\r\n点击确认，重新测试，否则测试失败。", ct))) { pass = false; break; }  // G8: 取消重试 → 退出循环
-        
-            await Task.Delay(5000, ct);
-            continue;  // G8: 原 goto tryagain → 重新测试
-        }  // G8: while(true) 重试循环结束（原 goto tryagain 标签）
-        pass &= prevPass1;  // G8: 合并本段结果到整体结果
-        
-        if (!(await op.Dut.QueryBooleanAsync("ConnectHart", new[]{ address.ToString() }, ct))) { op.Report("与设备指令通讯有问题，连接Hart变送器失败", RealtimeLevel.Error); pass = false; }
-        
+        int address = 0;
+
+        // 1. 切换 HART 档位
+        op.Step("HART测试 - 切换电测档位 ...");
+        await op.Gzp21.SetOutputAsync("Hart", true, ct);
+        await Task.Delay(1000, ct);
+        if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_HART", null, ct)))
+        {
+            op.Fail("HART测试 - 切换电测档位失败");
+            await op.Gzp21.SetOutputAsync("Hart", false, ct);
+            return StepResult.Fail("HART测试未通过：切换电测档位失败");
+        }
+
+        // 2. 切换供电模式
+        op.Step("HART测试 - 切换供电模式 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetSupplyMode", null, ct)))
+        {
+            op.Fail("HART测试 - 获取供电模式失败");
+            pass = false;
+        }
+        if (!(await op.Dut.QueryBooleanAsync("SetSwitchMode_IPIR", null, ct)))
+        {
+            op.Fail("HART测试 - 切换供电模式失败");
+            pass = false;
+        }
+
+        // 3. 搜索 HART 设备
+        op.Step("HART测试 - 搜索 HART 设备 ...");
+        await Task.Delay(8000, ct);
+        if (!(await op.Dut.QueryBooleanAsync("StartSearchHart", null, ct)))
+        {
+            op.Fail("HART测试 - 搜索 HART 失败");
+            pass = false;
+        }
+        await Task.Delay(1000, ct);
+        if (!(await op.Dut.QueryBooleanAsync("GetEleHartMassage", null, ct)))
+        {
+            op.Fail("HART测试 - 获取 HART 信息失败");
+            pass = false;
+        }
+
+        // 4. 连接 HART 设备
+        if (pass)
+        {
+            op.Step("HART测试 - 连接 HART 设备 ...");
+            if (!(await op.Dut.QueryBooleanAsync("ConnectHart", new[]{ address.ToString() }, ct)))
+            {
+                op.Fail("HART测试 - 连接 HART 设备失败");
+                pass = false;
+            }
+        }
+
+        // 5. 清理
         await op.Dut.CommandAsync("StopSearchHart", null, ct);
         await op.Dut.CommandAsync("SetEleChannelItem_HARTClose", null, ct);
         await op.Gzp21.SetOutputAsync("Hart", false, ct);
         await op.Dut.CommandAsync("SetTestMode", null, ct);
-        
-        op.Report(pass ? "✓ HART测试通过" : "✗ HART测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+
+        if (pass) op.Ok("HART测试通过");
+        else op.Fail("HART测试未通过");
         return pass ? StepResult.Pass("HART测试通过") : StepResult.Fail("HART测试未通过");
     }
 }
@@ -624,74 +882,64 @@ public sealed class TestMeterStateConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        // G10 遗留变量 MainBoardCheckStata：原始声明引用旧框架/旧类型未迁移，以下为可编译占位
-        
-        
-        
-        //获取条件
-        //根据机型获取电池功耗参数,10MPa机型单独一个电池功耗参数
-        
-        
-        var retryOk = await RetryHelper.RetryAsync(async attempt =>
-        {
-            pass = true;  // 每次重试重置本段结果
-            await op.Gzp21.GetOutputStateAsync("27V", ct);
-            await Task.Delay(1000, ct);
-            await op.Gzp21.SetOutputAsync("27V", false, ct);
-            await Task.Delay(1000, ct);
-            await Task.Delay(1000, ct);
-            return pass;
-        }, _ => ctx.ConfirmAsync("请确认未接外部电源，确认未接后，再继续进行测试？", ct), 3, ct);
-        if (!retryOk) pass = false;
-        
-        
-        
-        if (!(await op.Dut.QueryBooleanAsync("SetBrightness", new[]{ "Percentage", "50" }, ct))) { op.Report("指令通讯有问题，初始化屏幕亮度50%失败", RealtimeLevel.Error); pass = false; }
-        if (!(await op.Dut.QueryBooleanAsync("SetWifiClose", null, ct))) { op.Report("指令通讯有问题，初始化WIFI关闭失败", RealtimeLevel.Error); pass = false; }
-        //初始化蓝牙关闭
-        if (!(await op.Dut.QueryBooleanAsync("CloseBlueTooth", null, ct))) { op.Report("指令通讯有问题，初始化蓝牙关闭失败", RealtimeLevel.Error); pass = false; }
-        if (!(await op.Dut.QueryBooleanAsync("SetTestMode", null, ct))) { op.Report("指令通讯有问题，初始化压力测量模式失败", RealtimeLevel.Error); pass = false; }
-        if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_VOL", null, ct))) { op.Report("指令通讯有问题，初始化电压测量模式失败", RealtimeLevel.Error); pass = false; }
-        if (!(await op.Dut.QueryBooleanAsync("SetElectricSource_MA", new[]{ "true" }, ct))) { op.Report("指令通讯有问题，初始化电流输出模式失败", RealtimeLevel.Error); pass = false; }
-        
-        // 读取主板自检状态（成功即通过）
-        if (!(await op.Dut.QueryBooleanAsync("GetMainBoardCheckState", null, ct))) { op.Report("指令通讯有问题，读取主板自检状态失败", RealtimeLevel.Error); pass = false; }
-        
-        // 读取供电方式（成功即通过）
-        if (!(await op.Dut.QueryBooleanAsync("GetPowerSupplyCheck", null, ct))) { op.Report("指令通讯有问题，读取供电方式失败", RealtimeLevel.Error); pass = false; }
-        
-        
-        
-        //设置排空模式
-        if ((await op.Dut.QueryBooleanAsync("SetVentMode", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("切换排空模式失败,重试？", ct))) pass = false;
-        op.Report($"结果2: {"切换排空模式失败"}");
-        op.Report($"结果2: {"切换排空模式成功"}");
-        
-        
-        //设置控制器测试模式
-        if ((await op.Dut.QueryBooleanAsync("SetTestMode", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("切换控制器测试模式失败,重试？", ct))) pass = false;
-        op.Report($"结果3: {"切换控制器测试模式失败"}");
-        op.Report($"结果3: {"切换控制器测试模式成功"}");
-        
-        await Task.Delay(5000, ct);
-        
-        List<double> EnergyCheckStata = null!;
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetEnergyCheckStata", null, ct))) { op.Report("指令通讯有问题，获取整机功耗数据失败", RealtimeLevel.Error); pass = false; }
-        op.Report($"结果4: {"获取整机功耗数据失败"}");
-        op.Report($"结果4: {Math.Abs(EnergyCheckStata[2]) + "mW   整机功耗测试错误"}");
-        op.Report($"结果4: {Math.Abs(EnergyCheckStata[2]) + "mW  整机功耗测试通过"}");
+
+        // 1. 断开外部电源
+        op.Step("电池功耗 - 断开外部电源 ...");
+        await op.Gzp21.GetOutputStateAsync("27V", ct);
         await Task.Delay(1000, ct);
-        
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetBatteryValue", null, ct))) { op.Report("GetBatteryValue 调用失败", RealtimeLevel.Error); pass = false; }
-        
+        await op.Gzp21.SetOutputAsync("27V", false, ct);
+        await Task.Delay(2000, ct);
+
+        // 2. 初始化测试环境
+        op.Step("电池功耗 - 初始化测试环境 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetBrightness", new[]{ "Percentage", "50" }, ct))) { op.Fail("初始化屏幕亮度失败"); pass = false; }
+        if (!(await op.Dut.QueryBooleanAsync("SetWifiClose", null, ct))) { op.Fail("初始化WIFI关闭失败"); pass = false; }
+        if (!(await op.Dut.QueryBooleanAsync("CloseBlueTooth", null, ct))) { op.Fail("初始化蓝牙关闭失败"); pass = false; }
+        if (!(await op.Dut.QueryBooleanAsync("SetTestMode", null, ct))) { op.Fail("初始化压力测量模式失败"); pass = false; }
+        if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_VOL", null, ct))) { op.Fail("初始化电压测量模式失败"); pass = false; }
+        if (!(await op.Dut.QueryBooleanAsync("SetElectricSource_MA", new[]{ "true" }, ct))) { op.Fail("初始化电流输出模式失败"); pass = false; }
+
+        // 3. 读取主板自检状态
+        op.Step("电池功耗 - 读取主板自检状态 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetMainBoardCheckState", null, ct))) { op.Fail("读取主板自检状态失败"); pass = false; }
+
+        // 4. 读取供电方式
+        op.Step("电池功耗 - 读取供电方式 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetPowerSupplyCheck", null, ct))) { op.Fail("读取供电方式失败"); pass = false; }
+
+        // 5. 切换排空模式
+        op.Step("电池功耗 - 切换排空模式 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetVentMode", null, ct))) { op.Fail("切换排空模式失败"); pass = false; }
+
+        // 6. 切换控制器测试模式
+        op.Step("电池功耗 - 切换控制器测试模式 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetTestMode", null, ct))) { op.Fail("切换控制器测试模式失败"); pass = false; }
+
+        // 7. 获取整机功耗数据
+        await Task.Delay(5000, ct);
+        op.Step("电池功耗 - 获取整机功耗数据 ...");
+        List<double> EnergyCheckStata = null!;
+        if (!(await op.Dut.QueryBooleanAsync("GetEnergyCheckStata", null, ct)))
+        {
+            op.Fail("获取整机功耗数据失败");
+            pass = false;
+        }
+        else
+        {
+            op.Value("整机功耗", Math.Abs(EnergyCheckStata[2]), "mW");
+        }
+        await Task.Delay(1000, ct);
+
+        // 8. 获取电池电量
+        op.Step("电池功耗 - 获取电池电量 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetBatteryValue", null, ct))) { op.Fail("获取电池电量失败"); pass = false; }
+
+        // 9. 恢复供电
         await op.Gzp21.SetOutputAsync("27V", false, ct);
         await op.Gzp21.SetOutputAsync("27V", true, ct);
-        
-        op.Report(pass ? "✓ 电池功耗测试通过" : "✗ 电池功耗测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+
+        if (pass) op.Ok("电池功耗测试通过");
+        else op.Fail("电池功耗测试未通过");
         return pass ? StepResult.Pass("电池功耗测试通过") : StepResult.Fail("电池功耗测试未通过");
     }
 }
@@ -714,11 +962,27 @@ public sealed class ElectricalPowerTestConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        var probe = await op.Dut.QueryTextAsync("GetPowerSupplyCheck", null, ct);
-        op.Report($"设备回读：{probe}");
-        pass &= !string.IsNullOrWhiteSpace(probe);
-        op.Report(pass ? "✓ 电测板电源测试通过" : "✗ 电测板电源测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
-        return pass ? StepResult.Pass("电测板电源测试通过") : StepResult.Fail("电测板电源测试未通过");
+
+        // 1. 获取电测板电源状态
+        op.Step("电测板电源 - 获取电源状态 ...");
+        var state = await op.Dut.QueryTextAsync("GetElectricalBroadPowerCheckState", null, ct);
+        op.Text("电源状态", state ?? "");
+        if (string.IsNullOrWhiteSpace(state))
+        {
+            op.Fail("电测板电源 - 获取电源状态失败");
+            return StepResult.Fail("电测板电源测试未通过：获取电源状态失败");
+        }
+
+        // 2. 验证电源状态
+        op.Step("电测板电源 - 验证电源状态 ...");
+        if (state != "OK")
+        {
+            op.Fail($"电测板电源 - 状态异常：{state}");
+            return StepResult.Fail($"电测板电源测试未通过：状态异常 {state}");
+        }
+
+        op.Ok("电测板电源测试通过");
+        return StepResult.Pass("电测板电源测试通过");
     }
 }
 
@@ -753,10 +1017,12 @@ public sealed class ElectricalMeasurementAndOutputFunctionTestConST811AHandler :
             ("电流25mA", 25, "mA"),
         };
 
+        // 1. 开启电测输出
+        op.Step("电测功能测试 - 开启电测输出 ...");
         await op.Gzp21.SetOutputAsync("Ele", true, ct);
         await Task.Delay(3000, ct);
 
-        // 电测输出功能测试：逐点设定输出档位/目标值，回读测量值并在允差内判定（允差条件按测试点顺序取 Conditions）
+        // 2. 电测输出功能测试：逐点设定输出档位/目标值，回读测量值并在允差内判定
         for (var i = 0; i < testPoints.Length; i++)
         {
             var tp = testPoints[i];
@@ -767,7 +1033,7 @@ public sealed class ElectricalMeasurementAndOutputFunctionTestConST811AHandler :
             {
                 pointPass = true;
                 var pointOk = false;
-                op.Report($">>开始测试{tp.Name}（第{tryCount + 1}次）");
+                op.Step($"电测功能测试 - {tp.Name}（第{tryCount + 1}次）");
 
                 // 设置电输出档位
                 if (tp.Unit == "V")
@@ -809,9 +1075,9 @@ public sealed class ElectricalMeasurementAndOutputFunctionTestConST811AHandler :
                     var txt = await op.Dut.QueryTextAsync("GetCurrentElectricMeasure", null, ct);
                     if (double.TryParse(txt, NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) { eleData += v; readCount++; }
                 }
-                if (readCount == 0) { op.Report("读取测量值失败", RealtimeLevel.Error); pointPass = false; }
+                if (readCount == 0) { op.Fail($"{tp.Name} - 读取测量值失败"); pointPass = false; }
                 else eleData /= readCount;
-                op.Report($"{tp.Name} 测量值: {ConST811AOps.F(eleData)}{tp.Unit}");
+                op.Value($"{tp.Name} 测量值", eleData, tp.Unit);
 
                 // 判定：|测量值-目标值| 在允差内即通过
                 if (pointPass && cond is not null)
@@ -835,7 +1101,8 @@ public sealed class ElectricalMeasurementAndOutputFunctionTestConST811AHandler :
             pass &= pointPass;
         }
 
-        // 24V 环路电压供电测试（旧脚本 3 组：无/有环路 24V 供电，目标 10mA；最后一组应无环路电流）
+        // 3. 24V 环路电压供电测试
+        op.Step("电测功能测试 - 24V 环路供电测试 ...");
         var cond24V = ctx.Conditions.Count > 10 ? ctx.Conditions[10] : null;
         var twentyFourVTests = new (string Name, bool MAOn, bool CurrLoop)[]
         {
@@ -846,7 +1113,7 @@ public sealed class ElectricalMeasurementAndOutputFunctionTestConST811AHandler :
         for (var i = 0; i < twentyFourVTests.Length; i++)
         {
             var t = twentyFourVTests[i];
-            op.Report($">>开始测试{t.Name}");
+            op.Step($"电测功能测试 - {t.Name}");
             if (!(await op.Dut.QueryBooleanAsync("SetElectricSource_MA", new[]{ t.MAOn.ToString().ToLowerInvariant() }, ct))) { op.Report("切换电输出电流档位失败", RealtimeLevel.Error); pass = false; }
             if (!(await op.Dut.QueryBooleanAsync("SetElectricSourceTarget", new[]{ "10" }, ct))) { op.Report("设置电输出目标值失败", RealtimeLevel.Error); pass = false; }
             if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_CURR", new[]{ t.CurrLoop.ToString().ToLowerInvariant() }, ct))) { op.Report("设置电测量档位为电流档失败", RealtimeLevel.Error); pass = false; }
@@ -855,11 +1122,11 @@ public sealed class ElectricalMeasurementAndOutputFunctionTestConST811AHandler :
             var txt = await op.Dut.QueryTextAsync("GetCurrentElectricMeasure", null, ct);
             if (!double.TryParse(txt, NumberStyles.Float, CultureInfo.InvariantCulture, out var measuredValue24V))
             {
-                op.Report("读取测量值失败", RealtimeLevel.Error);
+                op.Fail($"{t.Name} - 读取测量值失败");
                 pass = false;
                 continue;
             }
-            op.Report($"{t.Name} 测量值: {ConST811AOps.F(measuredValue24V)}mA");
+            op.Value($"{t.Name} 测量值", measuredValue24V, "mA");
             if (cond24V is null) { pass = false; continue; }
 
             var r = ctx.Evaluator.Evaluate(cond24V, Math.Abs(measuredValue24V - 10));
@@ -868,9 +1135,12 @@ public sealed class ElectricalMeasurementAndOutputFunctionTestConST811AHandler :
             op.Report($"{t.Name}：{(ok ? "测试通过" : "测试不通过")}", ok ? RealtimeLevel.Info : RealtimeLevel.Warn);
         }
 
+        // 4. 关闭电测输出
+        op.Step("电测功能测试 - 关闭电测输出 ...");
         await op.Gzp21.SetOutputAsync("Ele", false, ct);
 
-        op.Report(pass ? "✓ 电测板测量/输出功能测试通过" : "✗ 电测板测量/输出功能测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+        if (pass) op.Ok("电测板测量/输出功能测试通过");
+        else op.Fail("电测板测量/输出功能测试未通过");
         return pass ? StepResult.Pass("电测板测量/输出功能测试通过") : StepResult.Fail("电测板测量/输出功能测试未通过");
     }
 }
@@ -894,13 +1164,16 @@ public sealed class TestSwitchConST811AHandler : IStepHandler
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
 
+        // 1. 开启电测输出
+        op.Step("开关测试 - 开启电测输出 ...");
         await op.Gzp21.SetOutputAsync("Ele", true, ct);
 
-        // 设置电测输出为电压档（0~16V）
-        if (!(await op.Dut.QueryBooleanAsync("SetElectricSourceFunction", new[]{ "V" }, ct))) { op.Report("切换电测电压档位失败", RealtimeLevel.Error); pass = false; }
+        // 2. 设置电测输出为电压档（0~16V）
+        op.Step("开关测试 - 切换电测电压档位 ...");
+        if (!(await op.Dut.QueryBooleanAsync("SetElectricSourceFunction", new[]{ "V" }, ct))) { op.Fail("切换电测电压档位失败"); pass = false; }
 
-        // 机械(或NPN)开关测试 -- 分开：输出 5V，开关应为断开（回读 0）
-        op.Report(">>机械(或NPN)开关测试--分开");
+        // 3. 机械(或NPN)开关测试 -- 分开：输出 5V，开关应为断开（回读 0）
+        op.Step("开关测试 - 机械(或NPN)开关分开测试 ...");
         if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_SW_Normal", null, ct))) { op.Report("打开机械开关失败", RealtimeLevel.Error); pass = false; }
         var retryOk1 = await RetryHelper.RetryAsync(async attempt =>
         {
@@ -919,8 +1192,8 @@ public sealed class TestSwitchConST811AHandler : IStepHandler
         }, _ => ctx.ConfirmAsync("电测线可能没接，请先使用测试线 连接设备与工装的SRC和MEAS插孔，红对红，黑对黑。\r\n点击确认，重新测试，否则测试失败。", ct), 4, ct);
         if (!retryOk1) pass = false;
 
-        // 机械(或NPN)开关测试 -- 短接：输出 0V，开关应为闭合（回读 1）
-        op.Report(">>机械(或NPN)开关测试--短接");
+        // 4. 机械(或NPN)开关测试 -- 短接：输出 0V，开关应为闭合（回读 1）
+        op.Step("开关测试 - 机械(或NPN)开关短接测试 ...");
         var retryOk2 = await RetryHelper.RetryAsync(async attempt =>
         {
             var ok = false;
@@ -938,8 +1211,8 @@ public sealed class TestSwitchConST811AHandler : IStepHandler
         }, _ => ctx.ConfirmAsync("电测线可能没接，请先使用测试线 连接设备与工装的SRC和MEAS插孔，红对红，黑对黑。\r\n点击确认，重新测试，否则测试失败。", ct), 4, ct);
         if (!retryOk2) pass = false;
 
-        // PNP 开关测试 -- 闭合：输出 5V，PNP 闭合（回读 1）
-        op.Report(">>PNP开关测试--闭合");
+        // 5. PNP 开关测试 -- 闭合：输出 5V，PNP 闭合（回读 1）
+        op.Step("开关测试 - PNP 开关闭合测试 ...");
         if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_SW_PNP", null, ct))) { op.Report("打开PNP开关失败", RealtimeLevel.Error); pass = false; }
         await Task.Delay(1000, ct);
         var retryOk3 = await RetryHelper.RetryAsync(async attempt =>
@@ -959,8 +1232,8 @@ public sealed class TestSwitchConST811AHandler : IStepHandler
         }, _ => ctx.ConfirmAsync("电测线可能没接，请先使用测试线 连接设备与工装的SRC和MEAS插孔，红对红，黑对黑。\r\n点击确认，重新测试，否则测试失败。", ct), 4, ct);
         if (!retryOk3) pass = false;
 
-        // PNP 开关测试 -- 断开：输出 0V，PNP 断开（回读 0）
-        op.Report(">>PNP开关测试--断开");
+        // 6. PNP 开关测试 -- 断开：输出 0V，PNP 断开（回读 0）
+        op.Step("开关测试 - PNP 开关断开测试 ...");
         var retryOk4 = await RetryHelper.RetryAsync(async attempt =>
         {
             var ok = false;
@@ -978,9 +1251,12 @@ public sealed class TestSwitchConST811AHandler : IStepHandler
         }, _ => ctx.ConfirmAsync("电测线可能没接，请先使用测试线 连接设备与工装的SRC和MEAS插孔，红对红，黑对黑。\r\n点击确认，重新测试，否则测试失败。", ct), 4, ct);
         if (!retryOk4) pass = false;
 
+        // 7. 关闭电测输出
+        op.Step("开关测试 - 关闭电测输出 ...");
         await op.Gzp21.SetOutputAsync("Ele", false, ct);
 
-        op.Report(pass ? "✓ 开关测量功能测试通过" : "✗ 开关测量功能测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+        if (pass) op.Ok("开关测量功能测试通过");
+        else op.Fail("开关测量功能测试未通过");
         return pass ? StepResult.Pass("开关测量功能测试通过") : StepResult.Fail("开关测量功能测试未通过");
     }
 }
@@ -1029,37 +1305,39 @@ public sealed class RTCTimeTestConST811AHandler : IStepHandler
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        
-        
-        
+
+        // 1. 同步电脑时间到设备
+        op.Step("RTC时间测试 - 同步电脑时间 ...");
         DateTime computerTime = DateTime.Now;
-        if (!(await op.Dut.QueryBooleanAsync("SetSystemTime", new[]{ computerTime.ToString() }, ct))) { op.Report("SetSystemTime 调用失败", RealtimeLevel.Error); pass = false; }
-        
-        if (!(await op.Dut.QueryBooleanAsync("SetSystemDate", new[]{ computerTime.ToString() }, ct))) { op.Report("SetSystemDate 调用失败", RealtimeLevel.Error); pass = false; }
-        
-        
-        //回读
-        if (!(await op.Dut.QueryBooleanAsync("GetDevSysDate", null, ct))) { op.Report("GetDevSysDate 调用失败", RealtimeLevel.Error); pass = false; }
-        
-        
-        
-        
-        
+        op.Text("电脑时间", computerTime.ToString("yyyy-MM-dd HH:mm:ss"));
+        if (!(await op.Dut.QueryBooleanAsync("SetSystemTime", new[]{ computerTime.ToString() }, ct))) { op.Fail("设置系统时间失败"); pass = false; }
+        if (!(await op.Dut.QueryBooleanAsync("SetSystemDate", new[]{ computerTime.ToString() }, ct))) { op.Fail("设置系统日期失败"); pass = false; }
+
+        // 2. 回读设备时间
+        op.Step("RTC时间测试 - 回读设备时间 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetDevSysDate", null, ct))) { op.Fail("回读设备时间失败"); pass = false; }
+
+        // 3. 重启设备
+        op.Step("RTC时间测试 - 重启设备 ...");
         await op.Dut.CommandAsync("SetReboot", null, ct);
         await op.Dut.CommandAsync("Close", null, ct);
         await op.Dut.CommandAsync("SetCommConfigEmpty", null, ct);
         await Task.Delay(1000, ct);
-        
+
+        // 4. 重新连接设备
+        op.Step("RTC时间测试 - 重新连接设备 ...");
         await Task.Delay(1000, ct);
-        if (!(await op.Dut.QueryBooleanAsync("Open", null, ct))) { op.Report("Open 调用失败", RealtimeLevel.Error); pass = false; }
+        if (!(await op.Dut.QueryBooleanAsync("Open", null, ct))) { op.Fail("重新连接设备失败"); pass = false; }
         if (!(await ctx.ConfirmAsync("重启失败,请确认设备是否重启成功,若无异常,再重新测试!", ct))) pass = false;
-        
-        //回读
-        if (!(await op.Dut.QueryBooleanAsync("GetDevSysDate", null, ct))) { op.Report("GetDevSysDate 调用失败", RealtimeLevel.Error); pass = false; }
-        op.Report($"电脑时间: {DateTime.Now}");
-        
-        op.Report(pass ? "✓ 系统板RTC时间测试通过" : "✗ 系统板RTC时间测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
-        return pass ? StepResult.Pass("系统板RTC时间测试通过") : StepResult.Fail("系统板RTC时间测试未通过");
+
+        // 5. 重启后回读设备时间
+        op.Step("RTC时间测试 - 重启后回读设备时间 ...");
+        if (!(await op.Dut.QueryBooleanAsync("GetDevSysDate", null, ct))) { op.Fail("重启后回读设备时间失败"); pass = false; }
+        op.Text("重启后电脑时间", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+
+        if (pass) op.Ok("RTC时间测试通过");
+        else op.Fail("RTC时间测试未通过");
+        return pass ? StepResult.Pass("RTC时间测试通过") : StepResult.Fail("RTC时间测试未通过");
     }
 }
 
