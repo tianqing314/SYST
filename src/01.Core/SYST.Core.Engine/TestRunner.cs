@@ -450,7 +450,7 @@ public sealed class TestRunner
             {
                 ctx = new TestContext(provider, pos, step, _evaluator, _logger, StepReport,
                     s => SampleReported?.Invoke(this, s),
-                    (msg, img, ct2) => RequestConfirmAsync(pos.Index, step, msg, img, ct2))
+                    (msg, img, okText, cancelText, ct2) => RequestConfirmAsync(pos.Index, step, msg, img, okText, cancelText, ct2))
                 { SerialNumber = serialNo };
                 result = await ConfirmManualAsync(ctx, step, ct);
                 serialNo = ctx.SerialNumber ?? serialNo;
@@ -467,7 +467,7 @@ public sealed class TestRunner
 
                 ctx = new TestContext(provider, pos, step, _evaluator, _logger, StepReport,
                     s => SampleReported?.Invoke(this, s),
-                    (msg, img, ct2) => RequestConfirmAsync(pos.Index, step, msg, img, ct2))
+                    (msg, img, okText, cancelText, ct2) => RequestConfirmAsync(pos.Index, step, msg, img, okText, cancelText, ct2))
                 { SerialNumber = serialNo };
 
                 var fatal = false;
@@ -629,6 +629,8 @@ public sealed class TestRunner
     /// <param name="step">当前测试项（用作弹窗标题上下文）。</param>
     /// <param name="message">确认消息（弹窗主体）。</param>
     /// <param name="imagePath">附图路径（可空）。</param>
+    /// <param name="okButtonText">确认按钮文案（可空=默认"通过（OK）"）。</param>
+    /// <param name="cancelButtonText">取消按钮文案（可空=默认"不合格（NG）"）。</param>
     /// <param name="ct">取消令牌。</param>
     /// <returns>true=操作员确认 OK；false=NG/超时/取消/无 UI。</returns>
     private async Task<bool> RequestConfirmAsync(
@@ -636,6 +638,8 @@ public sealed class TestRunner
         StepDescriptor step,
         string? message,
         string? imagePath,
+        string? okButtonText,
+        string? cancelButtonText,
         CancellationToken ct)
     {
         // 无 UI 订阅：按取消（false）返回，避免号位挂死
@@ -650,6 +654,8 @@ public sealed class TestRunner
         {
             Message = message,
             ImagePath = imagePath,
+            OkButtonText = okButtonText,
+            CancelButtonText = cancelButtonText,
         };
 
         // 取消令牌：触发时把结论置为 Timeout（→ false），让 await 早日返回
@@ -736,7 +742,7 @@ public sealed class TestRunner
             };
             var ctx = new TestContext(provider, firstPos, placeholderStep, _evaluator, _logger,
                 (msg, lvl) => Message?.Invoke(this, new RealtimeMessageEventArgs { PositionIndex = firstPos.Index, Message = msg, Level = lvl }),
-                confirm: (msg, img, ct2) => RequestConfirmAsync(firstPos.Index, placeholderStep, msg, img, ct2));
+                confirm: (msg, img, okText, cancelText, ct2) => RequestConfirmAsync(firstPos.Index, placeholderStep, msg, img, okText, cancelText, ct2));
 
             _logger.LogInformation("{Step} 开始（DeviceFamily={Family}）", stepName, manifest.DeviceFamily);
             var result = await stepFunc(ctx, ct);

@@ -188,7 +188,8 @@ public sealed class ConST811ASimulatedDut : IConST811ADut
             "GetSystemTime" => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
             "GetDevSysDate" => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
             "GetCheckerState" => "TestPass",
-            "GetCurrentElectricMeasure" => "0.000",
+            "GetCurrentElectricMeasure" => "4.000",
+            "GetPAMassage" => "1",
             _ => "0",
         });
     }

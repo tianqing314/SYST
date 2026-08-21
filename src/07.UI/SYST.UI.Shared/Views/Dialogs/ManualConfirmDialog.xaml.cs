@@ -63,6 +63,12 @@ public partial class ManualConfirmDialog : ChromeWindow
         // 附图（内联确认可选）：尝试加载 pack URI 或文件路径，失败则隐藏
         LoadConfirmImage(args.ImagePath);
 
+        // 自定义按钮文案（重试提示等非合格/不合格场景）
+        if (!string.IsNullOrWhiteSpace(args.OkButtonText))
+            OkBtn.Content = args.OkButtonText;
+        if (!string.IsNullOrWhiteSpace(args.CancelButtonText))
+            NgBtn.Content = args.CancelButtonText;
+
         if (args.TimeoutMs > 0)
         {
             _deadline = System.DateTime.Now.AddMilliseconds(args.TimeoutMs);

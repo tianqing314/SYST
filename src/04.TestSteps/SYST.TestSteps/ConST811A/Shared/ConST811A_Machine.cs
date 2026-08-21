@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using SYST.Core.Abstractions;
 
 namespace SYST.TestSteps.ConST811A;
@@ -41,6 +41,7 @@ public sealed class AtmosSensorTestConST811AHandler : IStepHandler
 // ============================================================================
 /// <summary>
 /// 蜂鸣器测试（公共处理器）。所有 ConST811A 变体（BP/DP/LLP/MP）共用。
+/// 设备上启动蜂鸣器自检程序，用户在设备上操作并点击 Success/Fail，程序轮询结果。
 /// </summary>
 public sealed class BeeperTestConST811AHandler : IStepHandler
 {
@@ -50,10 +51,29 @@ public sealed class BeeperTestConST811AHandler : IStepHandler
     public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
     {
         var op = ConST811AOpsFactory.Create(ctx, ct);
-        var ok = await ctx.ConfirmAsync("设备蜂鸣器已响，请确认是否听到蜂鸣声？", ct);
-        if (ok) op.Ok("蜂鸣器测试通过");
+        var pass = false;
+
+        // 启动设备蜂鸣器自检程序（设备弹出应用供用户操作）
+        if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[] { "Speaker" }, ct)))
+        {
+            op.Fail("启动蜂鸣器自检程序失败");
+            return StepResult.Fail("蜂鸣器测试未通过：启动自检程序失败");
+        }
+
+        // 轮询自检结果（用户在设备上点击 Success/Fail）
+        for (var i = 0; i < 120; i++)
+        {
+            var state = await op.Dut.QueryTextAsync("GetCheckerState", new[] { "Speaker" }, ct);
+            if (state == "TestPass") { pass = true; break; }
+            if (state == "TestFail") { break; }
+            await Task.Delay(500, ct);
+        }
+
+        await op.Dut.QueryBooleanAsync("SetCheckerClose", null, ct);
+
+        if (pass) op.Ok("蜂鸣器测试通过");
         else op.Fail("蜂鸣器测试未通过");
-        return ok ? StepResult.Pass("蜂鸣器测试通过") : StepResult.Fail("蜂鸣器测试未通过");
+        return pass ? StepResult.Pass("蜂鸣器测试通过") : StepResult.Fail("蜂鸣器测试未通过");
     }
 }
 
@@ -160,7 +180,7 @@ public sealed class ElectricalMeasurementAndOutputFunctionTestConST811AHandler :
                     pointPass = false;
                     break;
                 }
-                if (!(await ctx.ConfirmAsync("电测线可能没接，请先使用测试线 连接设备与工装的SRC和MEAS插孔，红对红，黑对黑。\r\n点击确认，重新测试，否则测试失败。", ct)))
+                if (!(await ctx.ConfirmAsync("电测线可能没接，请先使用测试线 连接设备与工装的SRC和MEAS插孔，红对红，黑对黑。\r\n点击确认，重新测试，否则测试失败。", "确认", "取消", ct)))
                 { pointPass = false; break; }
             }
             pass &= pointPass;
@@ -235,6 +255,7 @@ public sealed class ElectricalPowerTestConST811AHandler : IStepHandler
 // ============================================================================
 /// <summary>
 /// 风扇测试（公共处理器）。所有 ConST811A 变体（BP/DP/LLP/MP）共用。
+/// 设备上启动风扇自检程序，用户在设备上操作并点击 Success/Fail，程序轮询结果。
 /// </summary>
 public sealed class FANTestConST811AHandler : IStepHandler
 {
@@ -244,10 +265,29 @@ public sealed class FANTestConST811AHandler : IStepHandler
     public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
     {
         var op = ConST811AOpsFactory.Create(ctx, ct);
-        var ok = await ctx.ConfirmAsync("设备风扇已运转，请确认风扇是否正常工作？", ct);
-        if (ok) op.Ok("风扇测试通过");
+        var pass = false;
+
+        // 启动设备风扇自检程序（设备弹出应用供用户操作）
+        if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[] { "Fan" }, ct)))
+        {
+            op.Fail("启动风扇自检程序失败");
+            return StepResult.Fail("风扇测试未通过：启动自检程序失败");
+        }
+
+        // 轮询自检结果（用户在设备上点击 Success/Fail）
+        for (var i = 0; i < 120; i++)
+        {
+            var state = await op.Dut.QueryTextAsync("GetCheckerState", new[] { "Fan" }, ct);
+            if (state == "TestPass") { pass = true; break; }
+            if (state == "TestFail") { break; }
+            await Task.Delay(500, ct);
+        }
+
+        await op.Dut.QueryBooleanAsync("SetCheckerClose", null, ct);
+
+        if (pass) op.Ok("风扇测试通过");
         else op.Fail("风扇测试未通过");
-        return ok ? StepResult.Pass("风扇测试通过") : StepResult.Fail("风扇测试未通过");
+        return pass ? StepResult.Pass("风扇测试通过") : StepResult.Fail("风扇测试未通过");
     }
 }
 
@@ -290,6 +330,7 @@ public sealed class GasPumpTestConST811AHandler : IStepHandler
 // ============================================================================
 /// <summary>
 /// 屏幕测试（公共处理器）。所有 ConST811A 变体（BP/DP/LLP/MP）共用。
+/// 含3个子测试：屏幕亮度、屏幕坏点、屏幕触摸。设备上启动自检程序，用户在设备上操作并点击 Success/Fail。
 /// </summary>
 public sealed class LCDTestConST811AHandler : IStepHandler
 {
@@ -299,29 +340,63 @@ public sealed class LCDTestConST811AHandler : IStepHandler
     public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
     {
         var op = ConST811AOpsFactory.Create(ctx, ct);
-        var pass = true;
+        var allPass = true;
 
-        var brightnessOk = await op.Dut.QueryBooleanAsync("LCDTest_Brightness", null, ct);
-        op.Verdict("亮度测试", brightnessOk);
-        if (!brightnessOk) pass = false;
-
-        if (pass)
+        try
         {
-            var deadPixelOk = await op.Dut.QueryBooleanAsync("LCDTest_DeadPixel", null, ct);
-            op.Verdict("坏点测试", deadPixelOk);
-            if (!deadPixelOk) pass = false;
+            // ===== 子测试1：屏幕亮度测试 =====
+            if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[] { "Brightness" }, ct)))
+            {
+                op.Fail("启动屏幕亮度自检程序失败");
+                return StepResult.Fail("屏幕亮度测试未通过：启动自检程序失败");
+            }
+            var brightnessPass = await PollCheckerState(op, "Brightness", ct);
+            op.Verdict("亮度测试", brightnessPass);
+            if (!brightnessPass) allPass = false;
+
+            // ===== 子测试2：屏幕坏点测试 =====
+            if (!(await op.Dut.QueryBooleanAsync("SetCheckerSelect", new[] { "BadPixel" }, ct)))
+            {
+                op.Fail("启动屏幕坏点自检程序失败");
+                return StepResult.Fail("屏幕坏点测试未通过：启动自检程序失败");
+            }
+            var badPixelPass = await PollCheckerState(op, "BadPixel", ct);
+            op.Verdict("坏点测试", badPixelPass);
+            if (!badPixelPass) allPass = false;
+
+            // ===== 子测试3：屏幕触摸测试 =====
+            if (!(await op.Dut.QueryBooleanAsync("SetCheckerSelect", new[] { "Touch" }, ct)))
+            {
+                op.Fail("启动屏幕触摸自检程序失败");
+                return StepResult.Fail("屏幕触摸测试未通过：启动自检程序失败");
+            }
+            var touchPass = await PollCheckerState(op, "Touch", ct);
+            op.Verdict("触摸测试", touchPass);
+            if (!touchPass) allPass = false;
+        }
+        finally
+        {
+            await op.Dut.QueryBooleanAsync("SetCheckerClose", null, ct);
         }
 
-        if (pass)
-        {
-            var touchOk = await op.Dut.QueryBooleanAsync("LCDTest_Touch", null, ct);
-            op.Verdict("触摸测试", touchOk);
-            if (!touchOk) pass = false;
-        }
-
-        if (pass) op.Ok("屏幕测试通过");
+        if (allPass) op.Ok("屏幕测试通过");
         else op.Fail("屏幕测试未通过");
-        return pass ? StepResult.Pass("屏幕测试通过") : StepResult.Fail("屏幕测试未通过");
+        return allPass ? StepResult.Pass("屏幕测试通过") : StepResult.Fail("屏幕测试未通过");
+    }
+
+    /// <summary>
+    /// 轮询设备自检状态，直到用户在设备上点击 Success/Fail 或超时。
+    /// </summary>
+    private static async Task<bool> PollCheckerState(ConST811AOpsBase op, string function, CancellationToken ct)
+    {
+        for (var i = 0; i < 120; i++)
+        {
+            var state = await op.Dut.QueryTextAsync("GetCheckerState", new[] { function }, ct);
+            if (state == "TestPass") return true;
+            if (state == "TestFail") return false;
+            await Task.Delay(500, ct);
+        }
+        return false;
     }
 }
 
@@ -836,6 +911,7 @@ public sealed class TestHartConST811AHandler : IStepHandler
 // ============================================================================
 /// <summary>
 /// 按键测试（公共处理器）。所有 ConST811A 变体（BP/DP/LLP/MP）共用。
+/// 设备上启动按键自检程序，用户在设备上操作并点击 Success/Fail，程序轮询结果。
 /// </summary>
 public sealed class TestKeyBoardConST811AHandler : IStepHandler
 {
@@ -845,10 +921,29 @@ public sealed class TestKeyBoardConST811AHandler : IStepHandler
     public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
     {
         var op = ConST811AOpsFactory.Create(ctx, ct);
-        var ok = await ctx.ConfirmAsync("请依次按下设备上的所有按键，完成后点击确认。", ct);
-        if (ok) op.Ok("按键测试通过");
+        var pass = false;
+
+        // 启动设备按键自检程序（设备弹出应用供用户操作）
+        if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[] { "KeyBoard" }, ct)))
+        {
+            op.Fail("启动按键自检程序失败");
+            return StepResult.Fail("按键测试未通过：启动自检程序失败");
+        }
+
+        // 轮询自检结果（用户在设备上点击 Success/Fail）
+        for (var i = 0; i < 120; i++)
+        {
+            var state = await op.Dut.QueryTextAsync("GetCheckerState", new[] { "KeyBoard" }, ct);
+            if (state == "TestPass") { pass = true; break; }
+            if (state == "TestFail") { break; }
+            await Task.Delay(500, ct);
+        }
+
+        await op.Dut.QueryBooleanAsync("SetCheckerClose", null, ct);
+
+        if (pass) op.Ok("按键测试通过");
         else op.Fail("按键测试未通过");
-        return ok ? StepResult.Pass("按键测试通过") : StepResult.Fail("按键测试未通过");
+        return pass ? StepResult.Pass("按键测试通过") : StepResult.Fail("按键测试未通过");
     }
 }
 
@@ -857,6 +952,7 @@ public sealed class TestKeyBoardConST811AHandler : IStepHandler
 // ============================================================================
 /// <summary>
 /// 网口通讯测试（公共处理器）。所有 ConST811A 变体（BP/DP/LLP/MP）共用。
+/// 读取设备以太网IP后启动网口自检程序，用户在设备上操作并点击 Success/Fail，程序轮询结果。
 /// </summary>
 public sealed class TestLANConST811AHandler : IStepHandler
 {
@@ -868,7 +964,8 @@ public sealed class TestLANConST811AHandler : IStepHandler
         var op = ConST811AOpsFactory.Create(ctx, ct);
         var pass = true;
 
-        var ip = await op.Dut.QueryTextAsync("ReadIPAddress", null, ct);
+        // 读取设备以太网IP
+        var ip = await op.Dut.QueryTextAsync("GetStaticETHemetIPAddress", null, ct);
         op.Text("设备IP", ip ?? "");
         if (string.IsNullOrWhiteSpace(ip))
             pass = false;
@@ -878,27 +975,36 @@ public sealed class TestLANConST811AHandler : IStepHandler
             pass = false;
         }
 
-        if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", null, ct)))
-            pass = false;
-
-        var checkerOk = false;
-        for (var i = 0; i < 10; i++)
+        if (!pass)
         {
-            var state = await op.Dut.QueryTextAsync("GetCheckerState", null, ct);
-            if (state == "OK") { checkerOk = true; break; }
-            if (i < 9) await Task.Delay(1000, ct);
+            op.Fail("网口通讯测试未通过");
+            return StepResult.Fail("网口通讯测试未通过");
         }
-        op.Verdict("网口检查状态", checkerOk);
-        if (!checkerOk) pass = false;
 
-        if (!(await op.Dut.QueryBooleanAsync("SetCheckerClose", null, ct)))
-            pass = false;
-
-        if (pass)
+        try
         {
-            var connected = await op.Dut.QueryBooleanAsync("TestNetworkConnection", new[] { ip }, ct);
-            op.Verdict("网络连接", connected);
-            if (!connected) pass = false;
+            // 启动设备网口自检程序（设备弹出应用供用户操作）
+            if (!(await op.Dut.QueryBooleanAsync("SetCheckerOpen", new[] { "LAN" }, ct)))
+            {
+                op.Fail("启动网口自检程序失败");
+                return StepResult.Fail("网口通讯测试未通过：启动自检程序失败");
+            }
+
+            // 轮询自检结果（用户在设备上点击 Success/Fail）
+            var checkerOk = false;
+            for (var i = 0; i < 120; i++)
+            {
+                var state = await op.Dut.QueryTextAsync("GetCheckerState", new[] { "LAN" }, ct);
+                if (state == "TestPass") { checkerOk = true; break; }
+                if (state == "TestFail") { break; }
+                await Task.Delay(500, ct);
+            }
+            op.Verdict("网口检查状态", checkerOk);
+            if (!checkerOk) pass = false;
+        }
+        finally
+        {
+            await op.Dut.QueryBooleanAsync("SetCheckerClose", null, ct);
         }
 
         if (pass) op.Ok("网口通讯测试通过");
@@ -975,6 +1081,8 @@ public sealed class TestOverallWIFIConST811AHandler : IStepHandler
 // ============================================================================
 /// <summary>
 /// PA 模块测试（公共处理器）。所有 ConST811A 变体（BP/DP/LLP/MP）共用。
+/// 自动流程：工装打开PA继电器 → 设备切换PA档位 → 搜索PA → 连接 → 读取测量值。
+/// 搜索失败时提示操作员检查电测线并重试（最多3次）。
 /// </summary>
 public sealed class TestPaModuleConST811AHandler : IStepHandler
 {
@@ -984,10 +1092,103 @@ public sealed class TestPaModuleConST811AHandler : IStepHandler
     public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
     {
         var op = ConST811AOpsFactory.Create(ctx, ct);
-        var ok = await ctx.ConfirmAsync("PA 模块测试已完成，请确认测试结果。", ct);
-        if (ok) op.Ok("PA 模块测试通过");
+        var pass = false;
+
+        try
+        {
+            // 工装打开 PA 继电器
+            await op.Gzp21.SetOutputAsync("PA", true, ct);
+
+            for (var trynum = 1; trynum <= 3; trynum++)
+            {
+                // 设备切换电测档位为 PA 变送器
+                if (!(await op.Dut.QueryBooleanAsync("SetEleChannelItem_PA", null, ct)))
+                {
+                    op.Fail("电测档位切换PA变送器失败");
+                    return StepResult.Fail("PA 模块测试未通过：切换PA档位失败");
+                }
+                op.Report("电测档位切换PA变送器完成", RealtimeLevel.Info);
+                await Task.Delay(5000, ct);
+
+                // 搜索 PA 变送器
+                op.Report("开始搜索PA变送器", RealtimeLevel.Info);
+                if (!(await op.Dut.QueryBooleanAsync("SearchPA", null, ct)))
+                {
+                    op.Fail("搜索PA变送器失败");
+                    return StepResult.Fail("PA 模块测试未通过：搜索PA失败");
+                }
+
+                // 轮询获取搜索列表（最多10次，每次间隔1秒）
+                var paList = "";
+                for (var i = 0; i < 10; i++)
+                {
+                    paList = await op.Dut.QueryTextAsync("GetPAMassage", null, ct);
+                    if (!string.IsNullOrWhiteSpace(paList) && paList != "0")
+                        break;
+                    await Task.Delay(1000, ct);
+                }
+
+                op.Report("搜索结束", RealtimeLevel.Info);
+
+                if (string.IsNullOrWhiteSpace(paList) || paList == "0")
+                {
+                    // 没有搜索到设备，提示操作员检查电测线
+                    if (trynum < 3)
+                    {
+                        op.Report("没有获取搜索列表，弹窗提示是否正确接好电测线", RealtimeLevel.Warn);
+                        var retry = await ctx.ConfirmAsync(
+                            "没有搜索到设备，电测线可能没接，请先使用测试线 连接设备与工装的SRC和MEAS插孔，红对红，黑对黑。\r\n点击确认，重新测试，否则测试失败。",
+                            "确认", "取消", ct);
+                        if (!retry)
+                        {
+                            op.Fail("没有搜索到设备，操作员手动中止");
+                            return StepResult.Fail("PA 模块测试未通过：操作员手动中止");
+                        }
+                        await Task.Delay(5000, ct);
+                        continue;
+                    }
+                    op.Fail("没有搜索到任何PA");
+                    return StepResult.Fail("PA 模块测试未通过：没有搜索到任何PA");
+                }
+
+                // 获取搜索列表
+                op.Text("搜索列表", paList);
+
+                // 连接搜索到的第一个 PA 变送器（地址从搜索列表中取）
+                var address = paList.Split(',')[0].Trim();
+                op.Report($"开始连接PA变送器（地址：{address}）", RealtimeLevel.Info);
+                if (!(await op.Dut.QueryBooleanAsync("ConnectPA", new[] { address }, ct)))
+                {
+                    op.Fail("连接PA变送器失败");
+                    return StepResult.Fail("PA 模块测试未通过：连接PA失败");
+                }
+                op.Report("连接PA变送器完成", RealtimeLevel.Info);
+                await Task.Delay(1000, ct);
+
+                // 获取当前电测信息
+                var measure = await op.Dut.QueryTextAsync("GetCurrentElectricMeasure", null, ct);
+                op.Text("当前测试信息", measure ?? "");
+                op.Text("PA地址", address);
+
+                if (string.IsNullOrWhiteSpace(measure) || measure == "0")
+                {
+                    op.Fail("获取当前电测信息失败或测量值为空");
+                    return StepResult.Fail("PA 模块测试未通过：测量值为空");
+                }
+
+                pass = true;
+                break;
+            }
+        }
+        finally
+        {
+            // 工装关闭 PA 继电器
+            await op.Gzp21.SetOutputAsync("PA", false, ct);
+        }
+
+        if (pass) op.Ok("PA 模块测试通过");
         else op.Fail("PA 模块测试未通过");
-        return ok ? StepResult.Pass("PA 模块测试通过") : StepResult.Fail("PA 模块测试未通过");
+        return pass ? StepResult.Pass("PA 模块测试通过") : StepResult.Fail("PA 模块测试未通过");
     }
 }
 

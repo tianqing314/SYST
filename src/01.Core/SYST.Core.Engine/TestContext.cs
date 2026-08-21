@@ -25,9 +25,10 @@ internal sealed class TestContext : ITestContext
 
     /// <summary>
     /// 人工确认回调（弹 ManualConfirmDialog，可空——无 UI 订阅时 ConfirmAsync 返回 false）。
-    /// 参数：(message, imagePath, ct) → true=OK，false=NG/超时/取消。
+    /// 参数：(message, imagePath, okButtonText, cancelButtonText, ct) → true=OK，false=NG/超时/取消。
+    /// okButtonText/cancelButtonText 为 null 时用默认文案（通过/不合格）。
     /// </summary>
-    private readonly Func<string, string?, CancellationToken, Task<bool>>? _confirm;
+    private readonly Func<string, string?, string?, string?, CancellationToken, Task<bool>>? _confirm;
 
     /// <summary>
     /// 采集量单位。
@@ -78,7 +79,7 @@ internal sealed class TestContext : ITestContext
         ILogger logger,
         Action<string, RealtimeLevel> report,
         Action<SampleEventArgs>? onSample = null,
-        Func<string, string?, CancellationToken, Task<bool>>? confirm = null
+        Func<string, string?, string?, string?, CancellationToken, Task<bool>>? confirm = null
     )
     {
         _devices = devices;
@@ -211,7 +212,20 @@ internal sealed class TestContext : ITestContext
     /// <param name="ct">取消令牌。</param>
     /// <returns>true=OK；false=NG/超时/取消/无 UI。</returns>
     public Task<bool> ConfirmAsync(string message, CancellationToken ct = default)
-        => ConfirmAsync(message, null, ct);
+        => ConfirmAsync(message, null, null, null, ct);
+
+    /// <summary>
+    /// 弹出人工确认框（自定义按钮文案），等待操作员确认/取消。
+    /// 用于重试提示等非合格/不合格场景（如"点击确认，重新测试，否则测试失败"）。
+    /// 无 UI 订阅时返回 false（避免号位挂死）。
+    /// </summary>
+    /// <param name="message">确认消息。</param>
+    /// <param name="okButtonText">确认按钮文案。</param>
+    /// <param name="cancelButtonText">取消按钮文案。</param>
+    /// <param name="ct">取消令牌。</param>
+    /// <returns>true=操作员点击确认；false=取消/超时/无 UI。</returns>
+    public Task<bool> ConfirmAsync(string message, string okButtonText, string cancelButtonText, CancellationToken ct = default)
+        => ConfirmAsync(message, null, okButtonText, cancelButtonText, ct);
 
     /// <summary>
     /// 弹出带图片的人工确认框，等待操作员 OK/NG。取消/NG/超时/无 UI 订阅返回 false。
@@ -221,14 +235,20 @@ internal sealed class TestContext : ITestContext
     /// <param name="imagePath">图片路径（可空）。</param>
     /// <param name="ct">取消令牌。</param>
     /// <returns>true=OK；false=NG/超时/取消/无 UI。</returns>
-    public async Task<bool> ConfirmAsync(string message, string? imagePath, CancellationToken ct = default)
+    public Task<bool> ConfirmAsync(string message, string? imagePath, CancellationToken ct = default)
+        => ConfirmAsync(message, imagePath, null, null, ct);
+
+    /// <summary>
+    /// 弹出人工确认框（完整参数），等待操作员确认/取消。
+    /// </summary>
+    private async Task<bool> ConfirmAsync(string message, string? imagePath, string? okButtonText, string? cancelButtonText, CancellationToken ct)
     {
         // 无 UI 订阅：按取消（false）返回，避免号位挂死
         if (_confirm is null)
         {
             return false;
         }
-        return await _confirm(message, imagePath, ct);
+        return await _confirm(message, imagePath, okButtonText, cancelButtonText, ct);
     }
 
     /// <summary>

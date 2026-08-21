@@ -8,7 +8,8 @@ namespace SYST.Devices.StandardBox;
 /// <summary>
 /// 标准模块注册表：型号 → <see cref="IStandardModule"/> 工厂。新增标准设备（如正压/真空标准模块）
 /// 只需给驱动类打 <see cref="DutDriverAttribute"/>（实现 <see cref="IStandardModule"/>）即可自动注册，
-/// 无需改引擎/UI。未注册型号抛异常（标准模块不是仿真可替代的被检）。
+/// 无需改引擎/UI。同一型号若同时有真机与仿真实现，按 <paramref name="useReal"/>
+/// 择一（真机开关关且无仿真变体时回落真机实现）；未注册型号抛异常。
 /// </summary>
 public sealed class StandardModuleRegistry
 {
@@ -44,22 +45,29 @@ public sealed class StandardModuleRegistry
     /// <summary>
     /// 反射扫描本程序集（SYST.Devices），把实现 <see cref="IStandardModule"/> 且打
     /// <see cref="DutDriverAttribute"/> 的标准模块驱动按型号自动注册——新增标准设备只需给驱动类打特性。
+    /// 同一型号若同时有真机与仿真实现，按 <paramref name="useReal"/> 择一
+    /// （真机开关关且无仿真变体时回落真机实现，对齐纯真机设备的既有行为）。
     /// </summary>
-    public void AutoRegisterFromAssembly()
+    /// <param name="useReal">是否用真机驱动。</param>
+    public void AutoRegisterFromAssembly(bool useReal = true)
     {
-        var assembly = Assembly.GetExecutingAssembly();
-        foreach (var type in assembly.GetTypes())
+        var candidates = typeof(StandardModuleRegistry).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(IStandardModule).IsAssignableFrom(t))
+            .SelectMany(t => t.GetCustomAttributes<DutDriverAttribute>().Select(a => (a.Model, a.IsSimulation, Type: t)));
+
+        foreach (var group in candidates.GroupBy(x => x.Model, StringComparer.OrdinalIgnoreCase))
         {
-            if (type.IsAbstract || !type.IsClass || !typeof(IStandardModule).IsAssignableFrom(type))
+            var real = group.FirstOrDefault(x => !x.IsSimulation).Type;
+            var sim = group.FirstOrDefault(x => x.IsSimulation).Type;
+            var chosen = useReal ? real ?? sim : sim ?? real;
+            if (chosen is null)
             {
                 continue;
             }
-            var attr = type.GetCustomAttribute<DutDriverAttribute>();
-            if (attr is null)
-            {
-                continue;
-            }
-            Register(attr.Model, d => (IStandardModule)Activator.CreateInstance(type, d, _loggerFactory.CreateLogger($"STD.{d.Model}"))!);
+
+            var type = chosen;
+            var model = group.Key;
+            Register(model, d => (IStandardModule)Activator.CreateInstance(type, d, _loggerFactory.CreateLogger($"STD.{d.Model}"))!);
         }
     }
 

@@ -114,6 +114,18 @@ public interface ITestContext
     Task<bool> ConfirmAsync(string message, CancellationToken ct = default);
 
     /// <summary>
+    /// 弹出人工确认框（自定义按钮文案），等待操作员确认/取消。
+    /// 用于重试提示等非合格/不合格场景（如"点击确认，重新测试，否则测试失败"）。
+    /// 无 UI 订阅时返回 false（避免号位挂死）。
+    /// </summary>
+    /// <param name="message">确认消息（显示在弹窗主体）。</param>
+    /// <param name="okButtonText">确认按钮文案（如"确认"）。</param>
+    /// <param name="cancelButtonText">取消按钮文案（如"取消"）。</param>
+    /// <param name="ct">取消令牌。</param>
+    /// <returns>true=操作员点击确认；false=取消/超时/无 UI。</returns>
+    Task<bool> ConfirmAsync(string message, string okButtonText, string cancelButtonText, CancellationToken ct = default);
+
+    /// <summary>
     /// 弹出带图片的人工确认框（如指引图、参考照片），等待操作员 OK/NG。取消/NG/超时返回 false。
     /// 用于旧脚本的 <c>OpenInfoImgConfirmWindow</c> 场景。<paramref name="imagePath"/> 原样透传给 UI，
     /// 可为 pack URI（如 <c>pack://application:,,,/Assy;Component/images/x.png</c>）或文件路径，UI 端按需解析。
@@ -237,6 +249,16 @@ public sealed class ManualConfirmRequestedEventArgs : EventArgs
     /// 形如 <c>pack://application:,,,/Assy;Component/images/x.png</c> 原样透传，UI 端按需解析资源。
     /// </summary>
     public string? ImagePath { get; init; }
+
+    /// <summary>
+    /// 确认按钮文案（null = 默认"通过（OK）"）。用于重试提示等非合格/不合格场景（如"确认"）。
+    /// </summary>
+    public string? OkButtonText { get; init; }
+
+    /// <summary>
+    /// 取消按钮文案（null = 默认"不合格（NG）"）。用于重试提示等非合格/不合格场景（如"取消"）。
+    /// </summary>
+    public string? CancelButtonText { get; init; }
 
     /// <summary>
     /// 回传确认结果的通道（UI 调用 <see cref="Respond"/>）。

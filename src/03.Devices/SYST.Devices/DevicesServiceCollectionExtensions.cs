@@ -91,7 +91,7 @@ public static class DevicesServiceCollectionExtensions
         {
             var lf = sp.GetRequiredService<ILoggerFactory>();
             var registry = new StandardModuleRegistry(lf);
-            registry.AutoRegisterFromAssembly();
+            registry.AutoRegisterFromAssembly(useReal);
             return registry;
         });
 
