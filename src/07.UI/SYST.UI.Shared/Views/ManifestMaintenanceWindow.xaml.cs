@@ -1,0 +1,67 @@
+using System.Windows;
+using System.Windows.Controls;
+using SYST.UI.Shared.ViewModels;
+using SYST.UI.Shared.Views.Chrome;
+
+namespace SYST.UI.Shared.Views;
+
+/// <summary>
+/// SYST / 测试项 维护窗口（仅管理员）。
+/// </summary>
+public partial class ManifestMaintenanceWindow : ChromeWindow
+{
+    /// <summary>
+    /// 用 VM 构造。
+    /// </summary>
+    /// <param name="vm">维护页 VM。</param>
+    public ManifestMaintenanceWindow(ManifestMaintenanceViewModel vm)
+    {
+        InitializeComponent();
+        DataContext = vm;
+    }
+
+    /// <summary>
+    /// 双击测试项行 → 编辑该项。
+    /// </summary>
+    /// <param name="sender">事件源（DataGridRow）。</param>
+    /// <param name="e">鼠标事件。</param>
+    private void StepRow_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DataContext is ManifestMaintenanceViewModel vm
+            && sender is DataGridRow { Item: StepEditModel step }
+            && vm.EditStepCommand.CanExecute(step))
+        {
+            vm.EditStepCommand.Execute(step);
+        }
+    }
+
+    /// <summary>
+    /// 双击号位行 → 编辑该号位（含连接端点）。
+    /// </summary>
+    /// <param name="sender">事件源（DataGridRow）。</param>
+    /// <param name="e">鼠标事件。</param>
+    private void PositionRow_DoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DataContext is ManifestMaintenanceViewModel vm
+            && sender is DataGridRow { Item: PositionEditModel pos }
+            && vm.EditPositionCommand.CanExecute(pos))
+        {
+            vm.EditPositionCommand.Execute(pos);
+        }
+    }
+
+    /// <summary>
+    /// 点击共享设备行的任意位置都选中该行：行内的 TextBox/ComboBox 会拦截鼠标左键按下，
+    /// 仅靠 ListBox 默认行为点击控件时不会选中项，导致无法删除。
+    /// </summary>
+    /// <param name="sender">事件源（行 Border）。</param>
+    /// <param name="e">鼠标事件。</param>
+    private void SharedDeviceRow_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe
+            && ItemsControl.ContainerFromElement(SharedDevicesBox, fe) is ListBoxItem item)
+        {
+            item.IsSelected = true;
+        }
+    }
+}

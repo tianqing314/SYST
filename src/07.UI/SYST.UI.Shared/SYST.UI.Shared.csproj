@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="MaterialDesignThemes" />
+    <PackageReference Include="MdXaml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\01.Core\SYST.Core.Abstractions\SYST.Core.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\src\01.Core\SYST.Core.Engine\SYST.Core.Engine.csproj" />
+    <ProjectReference Include="..\..\..\src\02.Infrastructure\SYST.Infrastructure\SYST.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\03.Devices\SYST.Devices\SYST.Devices.csproj" />
+    <ProjectReference Include="..\..\06.Automation\SYST.Automation\SYST.Automation.csproj" />
+    <ProjectReference Include="..\..\05.Jigs\SYST.Jigs\SYST.Jigs.csproj" />
+  </ItemGroup>
+</Project>

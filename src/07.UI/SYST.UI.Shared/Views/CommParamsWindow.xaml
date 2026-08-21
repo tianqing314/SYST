@@ -1,0 +1,173 @@
+﻿<chrome:ChromeWindow x:Class="SYST.UI.Shared.Views.CommParamsWindow"
+                     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+                     xmlns:chrome="clr-namespace:SYST.UI.Shared.Views.Chrome"
+                     xmlns:vm="clr-namespace:SYST.UI.Shared.ViewModels"
+                     d:DataContext="{d:DesignInstance vm:CommParamsEditModel}"
+                     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                     mc:Ignorable="d"
+                     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                     Title="共享设备 · 通讯参数"
+                     TitleIcon="Tune"
+                     Style="{StaticResource ChromeWindow.Style}"
+                     Width="560"
+                     Height="340"
+                     CanMaximize="False"
+                     ShowInTaskbar="False"
+                     WindowStartupLocation="CenterOwner">
+    <chrome:ChromeWindow.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <Style
+            x:Key="FieldLabel"
+            TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Foreground" Value="{StaticResource Brush.TextWeak}" />
+        </Style>
+    </chrome:ChromeWindow.Resources>
+
+    <Grid Margin="16" Background="{StaticResource Brush.Bg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--  通讯方式  -->
+        <materialDesign:Card
+            Grid.Row="0"
+            Margin="0,0,0,10"
+            Padding="14,12"
+            Style="{StaticResource Card.Std}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock
+                    Style="{StaticResource FieldLabel}"
+                    Text="通讯方式" />
+                <ComboBox
+                    Width="160"
+                    DisplayMemberPath="Value"
+                    ItemsSource="{Binding LinkOptions}"
+                    SelectedValue="{Binding Link}"
+                    SelectedValuePath="Key" />
+            </StackPanel>
+        </materialDesign:Card>
+
+        <!--  通讯参数  -->
+        <materialDesign:Card
+            Grid.Row="1"
+            Padding="14,12"
+            Style="{StaticResource Card.Std}">
+            <StackPanel>
+                <!--  串口：2×2 网格  -->
+                <Grid
+                    Margin="0,2"
+                    Visibility="{Binding IsSerial, Converter={StaticResource BoolToVis}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="150" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock
+                        Grid.Row="0"
+                        Grid.Column="0"
+                        Margin="0,0,10,12"
+                        Style="{StaticResource FieldLabel}"
+                        Text="波特率" />
+                    <ComboBox
+                        Grid.Row="0"
+                        Grid.Column="1"
+                        Margin="0,0,20,12"
+                        ItemsSource="{Binding BaudOptions}"
+                        SelectedItem="{Binding Baud}" />
+                    <TextBlock
+                        Grid.Row="0"
+                        Grid.Column="2"
+                        Margin="0,0,10,12"
+                        Style="{StaticResource FieldLabel}"
+                        Text="数据位" />
+                    <ComboBox
+                        Grid.Row="0"
+                        Grid.Column="3"
+                        Margin="0,0,0,12"
+                        ItemsSource="{Binding DataBitsOptions}"
+                        SelectedItem="{Binding DataBits}" />
+
+                    <TextBlock
+                        Grid.Row="1"
+                        Grid.Column="0"
+                        Margin="0,0,10,0"
+                        Style="{StaticResource FieldLabel}"
+                        Text="停止位" />
+                    <ComboBox
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        Margin="0,0,20,0"
+                        DisplayMemberPath="Label"
+                        ItemsSource="{Binding StopBitsOptions}"
+                        SelectedValue="{Binding StopBits}"
+                        SelectedValuePath="Value" />
+                    <TextBlock
+                        Grid.Row="1"
+                        Grid.Column="2"
+                        Margin="0,0,10,0"
+                        Style="{StaticResource FieldLabel}"
+                        Text="校验位" />
+                    <ComboBox
+                        Grid.Row="1"
+                        Grid.Column="3"
+                        Margin="0,0,0,0"
+                        DisplayMemberPath="Label"
+                        ItemsSource="{Binding ParityOptions}"
+                        SelectedValue="{Binding Parity}"
+                        SelectedValuePath="Value" />
+                </Grid>
+
+                <!--  网口：仅端口号，提示独立一行  -->
+                <StackPanel Visibility="{Binding IsEthernet, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Margin="0,2,0,10" Orientation="Horizontal">
+                        <TextBlock
+                            Style="{StaticResource FieldLabel}"
+                            Text="端口号" />
+                        <TextBox
+                            Width="120"
+                            FontFamily="{StaticResource Font.Mono}"
+                            Text="{Binding Port, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{StaticResource Brush.TextWeak}"
+                        Text="IP 使用默认（192.168.40.110），无需配置"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+        </materialDesign:Card>
+
+        <!--  确定 / 取消  -->
+        <StackPanel
+            Grid.Row="2"
+            Margin="0,14,0,0"
+            HorizontalAlignment="Right"
+            Orientation="Horizontal">
+            <Button
+                Width="88"
+                Height="32"
+                Margin="0,0,10,0"
+                Command="{Binding CancelCommand}"
+                Style="{StaticResource Btn.Secondary}"
+                Content="取消" />
+            <Button
+                Width="88"
+                Height="32"
+                Command="{Binding OkCommand}"
+                Style="{StaticResource Btn.Primary}"
+                Content="确定" />
+        </StackPanel>
+    </Grid>
+</chrome:ChromeWindow>

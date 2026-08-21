@@ -1,0 +1,897 @@
+{
+  "Key": "ConST811A_LLP_Machine",
+  "DeviceFamily": "P21",
+  "BoardName": "微差压版整机测试",
+  "Description": "ConST811A 微差压版整机测试（自动转换自 References\\Machine\\ConST811A\\Jigs）",
+  "Dut": {
+    "Name": "ConST811A",
+    "Model": "ConST811A",
+    "ProductModel": "ConST811A-LLP",
+    "Comm": {
+      "Link": "Usb",
+      "PhysicalLink": "",
+      "Vid": 11801,
+      "Pid": 761
+    }
+  },
+  "ToolDevices": [
+    {
+      "Key": "GZP21",
+      "Name": "811A工装",
+      "Model": "ConST811ATestTool",
+      "Comm": {
+        "Link": "Ethernet",
+        "Port": 8899
+      }
+    },
+    {
+      "Key": "P06",
+      "Name": "ConST810",
+      "Model": "ConST810",
+      "Comm": {
+        "Link": "Usb",
+        "PhysicalLink": "",
+        "Vid": 11801,
+        "Pid": 760
+      }
+    }
+  ],
+  "Positions": [
+    {
+      "Index": 1,
+      "Name": "1号位",
+      "Comm": {
+        "Link": "Usb",
+        "PhysicalLink": "",
+        "Vid": 11801,
+        "Pid": 761
+      }
+    }
+  ],
+  "Steps": [
+    {
+      "Key": "TestDeviceWriteSN",
+      "Kind": "TestDeviceWriteSN",
+      "Name": "SN写入",
+      "Description": "写入整机SN号，并核对",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入SN",
+          "Value": "",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "59219d39-2498-4285-a17e-8a311e72d9b3"
+    },
+    {
+      "Key": "TestDeviceWriteType",
+      "Kind": "TestDeviceWriteType",
+      "Name": "设备类型写入",
+      "Description": "写入整机设备类型，并核对",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "c2977ff1-7edf-46f8-bf71-c0de36af24cf"
+    },
+    {
+      "Key": "TestSoftVersions",
+      "Kind": "TestSoftVersions",
+      "Name": "软件版本验证及升级",
+      "Description": "发指令获取核心板固件版本、主程序版本、控制板版本，并校验版本",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "SN",
+          "Value": "",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "297c2987-86c7-4ea7-a4a5-b810f87f1409"
+    },
+    {
+      "Key": "TestCPS",
+      "Kind": "TestCPS",
+      "Name": "CPS手动检测",
+      "Description": "1.将设备与连接台接好后，查看CPS图标，正常显示为通过。 \r\n2.上行控压，达到目标点进行下行控压，确定排气正常从C104出气。 气压版：上行7MPa，下行100kPa, 差压版：上行250kPa,下行50kPa，微差压版：上行10kPa，下行2kPa。 \r\n3.手动排空。",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Manual",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "e22a941b-66a3-44ee-b199-c80ac6106bb7"
+    },
+    {
+      "Key": "TestLAN",
+      "Kind": "TestLAN",
+      "Name": "网口通讯",
+      "Description": "通讯测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "1d549bf2-2167-42b8-927e-d6f949f290b3"
+    },
+    {
+      "Key": "TestKeyBoard",
+      "Kind": "TestKeyBoard",
+      "Name": "按键测试",
+      "Description": "按键测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "51b5a626-e777-41b9-9425-f6f7465851d5"
+    },
+    {
+      "Key": "LCDTest",
+      "Kind": "LCDTest",
+      "Name": "屏幕测试",
+      "Description": "进行屏幕亮度、屏幕坏点、屏幕触摸操作验证",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a871275f-a409-40bb-84cd-683f0e86cc19"
+    },
+    {
+      "Key": "BeeperTest",
+      "Kind": "BeeperTest",
+      "Name": "蜂鸣器测试",
+      "Description": "点击屏幕音量键，扬声器响一声，“确认”按钮",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "ae006ef2-e18f-47c7-b9b0-aa5d8e19a827"
+    },
+    {
+      "Key": "FANTest",
+      "Kind": "FANTest",
+      "Name": "风扇测试",
+      "Description": "风扇停止/启动测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "fabde802-6ce2-4c07-90bd-53b5730f54ad"
+    },
+    {
+      "Key": "Manual_1b0ac0cbde40461f9fcbc943513d9414",
+      "Kind": "Manual_1b0ac0cbde40461f9fcbc943513d9414",
+      "Name": "电源指示灯测试",
+      "Description": "目测电源按键指示灯为常亮状态.",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Manual",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "1b0ac0cb-de40-461f-9fcb-c943513d9414"
+    },
+    {
+      "Key": "TestPaModule",
+      "Kind": "TestPaModule",
+      "Name": "系统板PA模块测试",
+      "Description": "系统板PA模块测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "5e4499d3-fe51-4a18-a510-e5866c71b485"
+    },
+    {
+      "Key": "TestHart",
+      "Kind": "TestHart",
+      "Name": "HART测试",
+      "Description": "搜索Hart小板搜索到则通过",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "42a12b30-4488-4c87-bd01-5148e26f1ae0"
+    },
+    {
+      "Key": "TestMeterState",
+      "Kind": "TestMeterState",
+      "Name": "电池功耗测试",
+      "Description": "检验电池供电状态及功耗正常",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "整机功耗",
+          "Min": 0,
+          "Max": 11500,
+          "Unit": "mW"
+        },
+        {
+          "Kind": "Range",
+          "Name": "整机功耗-10M机型",
+          "Min": 0,
+          "Max": 12500,
+          "Unit": "mW"
+        }
+      ],
+      "Guid": "5f170be6-eedb-4488-9bb4-f20a0558e6fe"
+    },
+    {
+      "Key": "ElectricalPowerTest",
+      "Kind": "ElectricalPowerTest",
+      "Name": "电测板电源测试",
+      "Description": "发送指令读取电测板自检状态码，状态码为0，无故障",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "935af66a-7bb9-4901-8696-11bfe5af6094"
+    },
+    {
+      "Key": "ElectricalMeasurementAndOutputFunctionTest",
+      "Kind": "ElectricalMeasurementAndOutputFunctionTest",
+      "Name": "电测板测量/输出功能测试",
+      "Description": "电测板测量/输出功能测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "测量电压0V允差值",
+          "Min": 0,
+          "Max": 0.16,
+          "Unit": "V"
+        },
+        {
+          "Kind": "Range",
+          "Name": "测量电压0.1V允差值",
+          "Min": 0,
+          "Max": 0.16,
+          "Unit": "V"
+        },
+        {
+          "Kind": "Range",
+          "Name": "测量电压1V允差值",
+          "Min": 0,
+          "Max": 0.16,
+          "Unit": "V"
+        },
+        {
+          "Kind": "Range",
+          "Name": "测量电压10V允差值",
+          "Min": 0,
+          "Max": 0.16,
+          "Unit": "V"
+        },
+        {
+          "Kind": "Range",
+          "Name": "测量电压高压档16V允差值",
+          "Min": 0,
+          "Max": 1,
+          "Unit": "V"
+        },
+        {
+          "Kind": "Range",
+          "Name": "测量电压高压档24V允差值",
+          "Min": 0,
+          "Max": 1,
+          "Unit": "V"
+        },
+        {
+          "Kind": "Range",
+          "Name": "测量电压高压档29V允差值",
+          "Min": 0,
+          "Max": 1,
+          "Unit": "V"
+        },
+        {
+          "Kind": "Range",
+          "Name": "测量电流0mA允差值",
+          "Min": 0,
+          "Max": 0.25,
+          "Unit": "mA"
+        },
+        {
+          "Kind": "Range",
+          "Name": "测量电压1mA允差值",
+          "Min": 0,
+          "Max": 0.25,
+          "Unit": "mA"
+        },
+        {
+          "Kind": "Range",
+          "Name": "测量电压10mA允差值",
+          "Min": 0,
+          "Max": 0.25,
+          "Unit": "mA"
+        },
+        {
+          "Kind": "Range",
+          "Name": "24V环路电压供电允差",
+          "Min": 0,
+          "Max": 0.24,
+          "Unit": "mA"
+        }
+      ],
+      "Guid": "ac1843f4-6167-41e6-8fe3-97703e6f408c"
+    },
+    {
+      "Key": "TestSwitch",
+      "Kind": "TestSwitch",
+      "Name": "开关测量功能测试",
+      "Description": "开关测量功能测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "eb0aa2bb-4813-4d7a-96f2-bc5f47d7b357"
+    },
+    {
+      "Key": "ModuleConnectStateTest",
+      "Kind": "ModuleConnectStateTest",
+      "Name": "外接压力模块通讯测试",
+      "Description": "测试外接压力模块状态及和主机通讯情况",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "2aba578d-470e-400a-a8bf-b069e5fd2bea"
+    },
+    {
+      "Key": "RTCTimeTest",
+      "Kind": "RTCTimeTest",
+      "Name": "系统板RTC时间测试",
+      "Description": "系统板RTC时间测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "时间差",
+          "Min": -5,
+          "Max": 5,
+          "Unit": "s"
+        }
+      ],
+      "Guid": "d830a25b-65db-47de-b011-3a40390f54e0"
+    },
+    {
+      "Key": "TestUSBPrincipal",
+      "Kind": "TestUSBPrincipal",
+      "Name": "USB存储",
+      "Description": "往U盘写一测试文件，读文件，比较内容，提示结果，“确认”按钮",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入数据",
+          "Value": "testData010101-usb",
+          "Unit": null
+        }
+      ],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "读取数据",
+          "Min": 0,
+          "Max": 0,
+          "Unit": ""
+        },
+        {
+          "Kind": "Range",
+          "Name": "U盘大小",
+          "Min": 7,
+          "Max": 8,
+          "Unit": "GB"
+        }
+      ],
+      "Guid": "efc1fe0b-d858-4a83-8e9c-90de9fb7cf2c"
+    },
+    {
+      "Key": "TestUSBSubordinate",
+      "Kind": "TestUSBSubordinate",
+      "Name": "USB通讯",
+      "Description": "通讯测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "689a42a0-0e91-44e1-9775-e43765425db7"
+    },
+    {
+      "Key": "TestOverallWIFI",
+      "Kind": "TestOverallWIFI",
+      "Name": "WIFI测试",
+      "Description": "连接指定无线网络，并通讯测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "WIFI名称",
+          "Value": "CONSTSC",
+          "Unit": null
+        },
+        {
+          "Name": "加密模式",
+          "Value": "WPA2_PSK",
+          "Unit": null
+        },
+        {
+          "Name": "密码",
+          "Value": "4001131199",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "4b79b4fd-9c32-480e-adc9-6b83ee7a2434"
+    },
+    {
+      "Key": "TestBluetooth",
+      "Kind": "TestBluetooth",
+      "Name": "蓝牙测试",
+      "Description": "蓝牙测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "bbaaeb1e-3ac8-4d6a-8a6b-48874814cede"
+    },
+    {
+      "Key": "TestStorageCardPrincipal",
+      "Kind": "TestStorageCardPrincipal",
+      "Name": "SD卡测试",
+      "Description": "往SD卡写一测试文件，读文件，比较内容，提示结果，“确认”按钮",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入数据",
+          "Value": "testData010101-sd",
+          "Unit": null
+        }
+      ],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "读取数据",
+          "Min": 0,
+          "Max": 0,
+          "Unit": ""
+        }
+      ],
+      "Guid": "c9c6858f-ab82-4cbd-a8fd-3d61ff31f503"
+    },
+    {
+      "Key": "TestControllerBroadPower",
+      "Kind": "TestControllerBroadPower",
+      "Name": "控制板电源测试",
+      "Description": "发指令查询控制板诊断信息，返回状态值为正常则通过",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "732b65e8-1f64-4f3b-92e6-debf65fe323d"
+    },
+    {
+      "Key": "TestCalibrationSensor",
+      "Kind": "TestCalibrationSensor",
+      "Name": "进气传感器校准",
+      "Description": "发指令进行设备进气传感器校准",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "重启后等待时间",
+          "Min": 0,
+          "Max": 20,
+          "Unit": "秒"
+        },
+        {
+          "Kind": "Range",
+          "Name": "重启后尝试连接时间",
+          "Min": 0,
+          "Max": 30,
+          "Unit": "秒"
+        }
+      ],
+      "Guid": "7cb3a526-8403-492b-8b5f-76cf0631f8b3"
+    },
+    {
+      "Key": "TestSelfTuning",
+      "Kind": "TestSelfTuning",
+      "Name": "自整定",
+      "Description": "发指令进行设备自整定",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "44f214a3-06ef-4c19-864b-9d5fb503e692"
+    },
+    {
+      "Key": "LeakTestComposition_Low_LLP",
+      "Kind": "LeakTestComposition_Low_LLP",
+      "Name": "低压量程压力泄露测试和排空测试",
+      "Description": "低压量程测试压力的泄露性能和排空功能",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "正压30秒泄露率",
+          "Min": 0,
+          "Max": 0.3,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "正压气源30秒泄露率",
+          "Min": 0,
+          "Max": 0.3,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压45秒泄露率",
+          "Min": 0,
+          "Max": 0.5,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压气源30秒泄露率",
+          "Min": 0,
+          "Max": 0.5,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "正压控稳时间",
+          "Min": 0,
+          "Max": 120,
+          "Unit": "秒"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压控稳时间",
+          "Min": 0,
+          "Max": 120,
+          "Unit": "秒"
+        },
+        {
+          "Kind": "Range",
+          "Name": "排空后压力上限",
+          "Min": 0,
+          "Max": 0.5,
+          "Unit": "kPa"
+        }
+      ],
+      "Guid": "04359025-ddc8-4af4-ab88-3e237abdc513"
+    },
+    {
+      "Key": "LeakTestComposition_High_LLP",
+      "Kind": "LeakTestComposition_High_LLP",
+      "Name": "高压量程压力泄露测试和排空测试",
+      "Description": "高压量程测试压力的泄露性能和排空功能",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "正压30秒泄露率",
+          "Min": 0,
+          "Max": 0.3,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "正压气源30秒泄露率",
+          "Min": 0,
+          "Max": 0.3,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压45秒泄露率",
+          "Min": 0,
+          "Max": 0.5,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压气源30秒泄露率",
+          "Min": 0,
+          "Max": 0.5,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "正压控稳时间",
+          "Min": 0,
+          "Max": 120,
+          "Unit": "秒"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压控稳时间",
+          "Min": 0,
+          "Max": 120,
+          "Unit": "秒"
+        },
+        {
+          "Kind": "Range",
+          "Name": "排空后压力上限",
+          "Min": 0,
+          "Max": 0.5,
+          "Unit": "kPa"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压稳定时间",
+          "Min": 50,
+          "Max": 0,
+          "Unit": "S"
+        },
+        {
+          "Kind": "Range",
+          "Name": "正压稳定时间",
+          "Min": 30,
+          "Max": 0,
+          "Unit": "S"
+        }
+      ],
+      "Guid": "46ab138f-f283-4a47-a74f-fd711031c614"
+    },
+    {
+      "Key": "PressureControlTest",
+      "Kind": "PressureControlTest",
+      "Name": "压力控制测试",
+      "Description": "压力控制测试",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "正压控压时间",
+          "Min": 0,
+          "Max": 25,
+          "Unit": "S"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压控压时间",
+          "Min": 0,
+          "Max": 25,
+          "Unit": "S"
+        },
+        {
+          "Kind": "Range",
+          "Name": "正压设定点控压允差",
+          "Min": 0,
+          "Max": 5,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压设定点控压允差",
+          "Min": 0,
+          "Max": 5,
+          "Unit": "%"
+        },
+        {
+          "Kind": "Range",
+          "Name": "正压5%HP->100%HP控压时间",
+          "Min": 0,
+          "Max": 120,
+          "Unit": "S"
+        },
+        {
+          "Kind": "Range",
+          "Name": "负压5%HP->100%HP控压时间",
+          "Min": 0,
+          "Max": 35,
+          "Unit": "S"
+        },
+        {
+          "Kind": "Range",
+          "Name": "0%控压点允差",
+          "Min": 0,
+          "Max": 2,
+          "Unit": "%"
+        }
+      ],
+      "Guid": "d2dd7d82-2332-465b-ac4b-1adeb14cd063"
+    },
+    {
+      "Key": "AtmosSensorTest",
+      "Kind": "AtmosSensorTest",
+      "Name": "大气压传感器测试",
+      "Description": "检测811主机的大气压传感器状态",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "设备编号",
+          "Value": "",
+          "Unit": null
+        }
+      ],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "AtmosphereSensor",
+          "Min": 0,
+          "Max": 0.2,
+          "Unit": "kPa"
+        }
+      ],
+      "Guid": "c794bc8c-a5e7-4612-ba15-c5c6f3e49c01"
+    },
+    {
+      "Key": "QRLeakTest",
+      "Kind": "QRLeakTest",
+      "Name": "气容密封测试",
+      "Description": "右侧与中间接口使用三通和软管与810连接；用810控压10Kpa, 切换到测量。30s后泄露率≤ 0.3%",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "造压超时",
+          "Value": "20",
+          "Unit": "sec."
+        },
+        {
+          "Name": "判稳等待时间",
+          "Value": "10",
+          "Unit": "sec."
+        },
+        {
+          "Name": "采样时间",
+          "Value": "30",
+          "Unit": "sec."
+        }
+      ],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "判稳压力值",
+          "Min": 10,
+          "Max": 0,
+          "Unit": "kPa"
+        },
+        {
+          "Kind": "Range",
+          "Name": "判稳变化率",
+          "Min": 0,
+          "Max": 0.3,
+          "Unit": "%"
+        }
+      ],
+      "Guid": "6d94f583-709e-42f1-8c67-5f76daa1d692"
+    },
+    {
+      "Key": "TestPowerAdapter",
+      "Kind": "TestPowerAdapter",
+      "Name": "适配器供电测试",
+      "Description": "测试适配器充电状态",
+      "Settings": {
+        "ProductModel": "ConST811A-LLP"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "电池电量",
+          "Min": 40,
+          "Max": 80,
+          "Unit": "%"
+        }
+      ],
+      "Guid": "20a362da-6d8b-477d-9ff3-92671ef502ce"
+    }
+  ]
+}

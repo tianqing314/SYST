@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Company>Bots</Company>
+    <Product>SYST 动态测试平台</Product>
+
+    <!-- ===== 统一版本号（所有 SYST.* 项目共享）===== -->
+    <!-- 模板自带版本；生成项目时保持不变 -->
+    <Version>1.0.4</Version>
+    <AssemblyVersion>1.0.4.0</AssemblyVersion>
+    <FileVersion>1.0.4.0</FileVersion>
+  </PropertyGroup>
+</Project>

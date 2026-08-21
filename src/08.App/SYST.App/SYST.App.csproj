@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- windows10 TFM：可引用 WinRT 蓝牙扫描项目 SYST.Devices.BleWin -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>SYST.App</RootNamespace>
+    <AssemblyName>SYST.App</AssemblyName>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Resources\app.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MaterialDesignThemes" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\01.Core\SYST.Core.Abstractions\SYST.Core.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\src\01.Core\SYST.Core.Engine\SYST.Core.Engine.csproj" />
+    <ProjectReference Include="..\..\..\src\02.Infrastructure\SYST.Infrastructure\SYST.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\03.Devices\SYST.Devices\SYST.Devices.csproj" />
+    <ProjectReference Include="..\..\..\src\03.Devices\SYST.Devices.BleWin\SYST.Devices.BleWin.csproj" />
+    <ProjectReference Include="..\..\04.TestSteps\SYST.TestSteps\SYST.TestSteps.csproj" />
+    <ProjectReference Include="..\..\06.Automation\SYST.Automation\SYST.Automation.csproj" />
+    <ProjectReference Include="..\..\05.Jigs\SYST.Jigs\SYST.Jigs.csproj" />
+    <ProjectReference Include="..\..\07.UI\SYST.UI.Shared\SYST.UI.Shared.csproj" />
+    <!--
+      升级器（net48 独立小 exe）：不参与引用，只把 SYST.Updater.exe 复制到输出/发布目录。
+      否则在线升级时 UpdateService.StageUpdater 在程序目录找不到 {代号}.Updater.exe，
+      报「缺少升级器 …（发布包应包含，请重新发布）」。
+    -->
+    <ProjectReference Include="..\..\09.Updater\SYST.Updater\SYST.Updater.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <!-- 跳过目标框架兼容性检查，避免 net8 主项目引用 net48 升级器时产生 NU1702 警告 -->
+      <SkipGetTargetFrameworkProperties>true</SkipGetTargetFrameworkProperties>
+      <OutputItemType>Content</OutputItemType>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- 软件内可预览的手册（新增测试项目指导等），随程序拷到输出 Docs 目录 -->
+    <None Update="Docs\**\*.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- 系统介绍：引用 Template 根 README.md，拷到输出 Docs\README.md 供软件内预览 -->
+    <None Include="..\..\..\README.md" Link="Docs\README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>
