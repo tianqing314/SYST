@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO.Ports;
 using System.Text.RegularExpressions;
 using SYST.Core.Abstractions;
@@ -140,6 +140,38 @@ internal sealed class ConST811AOps
         if (values.Count <= 10) return values;
         return values.Skip(5).Take(values.Count - 10).ToList();
     }
+
+    /// <summary>
+    /// 执行设备指令并自动重试（替代旧脚本 goto tryagain + OpenInfoConfirmWindow 模式）。
+    /// 失败时仅记录日志，不弹窗。最多重试 maxRetries 次（含首次），每次间隔 1 秒。
+    /// </summary>
+    public async Task<bool> TryCommand(Func<Task<bool>> action, string desc, int maxRetries = 3)
+    {
+        for (var attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            _ct.ThrowIfCancellationRequested();
+            if (await action()) { Report($"✓ {desc}"); return true; }
+            Fail($"{desc}失败(第{attempt}次)");
+            if (attempt < maxRetries) await Task.Delay(1000, _ct);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 执行设备查询并读取返回值（自动重试）。失败时返回 null。
+    /// </summary>
+    public async Task<string?> TryQueryValue(Func<Task<string>> query, string desc, int maxRetries = 3)
+    {
+        for (var attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            _ct.ThrowIfCancellationRequested();
+            var val = await query();
+            if (!string.IsNullOrWhiteSpace(val)) { Report($"✓ {desc}: {val}"); return val; }
+            Fail($"{desc}失败(第{attempt}次)");
+            if (attempt < maxRetries) await Task.Delay(1000, _ct);
+        }
+        return null;
+    }
 }
 
 /// <summary>
@@ -153,54 +185,51 @@ public sealed class LeakTestSingle_BPConST811AHandler : IStepHandler
     public string? DeviceFamily => "ConST811A_BP_Machine";
 
     /// <summary>执行本测试项。</summary>
-    /// <param name="ctx">测试项上下文。</param>
-    /// <param name="ct">取消令牌。</param>
-    /// <returns>测试项结果。</returns>
     public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        // G10: 旧 List<TextData>/StringBuilder tvalue 改为 string 拼接，最终 op.Report
+        // 压力值与温度值记录
         var tvalue = "压力值,高压温度,低压温度,泵温度,电测板温度^";
         var tstr = "";
         Pressure getInternalModulePressureOrg = new Pressure(0, "kPa");
         var rate = 0.0;
 
-        await Task.Delay(500, ct);
-        //获取条件
-        
+        await op.Sleep(500);
+
+        // 打开内部模块稳定监控
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_H", "Open" }, ct);
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_L", "Open" }, ct);
-        
+
+        // 读取大气压
         Pressure AtmosSensor = new Pressure(0, "kPa");
-        await op.Dut.CommandAsync("GetAtmosSensor", null, ct);
-        
-        if ((await op.Dut.QueryBooleanAsync("SetPressureUnit_IPM", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("设定内部模块压力单位失败,重试？", ct))) pass = false;
-        
-        if ((await op.Dut.QueryBooleanAsync("GetSetPointLimitPressureRange", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("获取压力控制量程范围失败,重试？", ct))) pass = false;
-        
-        Pressure InnerModulePressureUpper = new Pressure(0, "kPa");//量程上限
+        var atmosTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetAtmosSensor", null, ct), "读取大气压传感器");
+        if (atmosTxt is not null && double.TryParse(atmosTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var atmosVal))
+            AtmosSensor = new Pressure(atmosVal, "kPa");
+        else pass = false;
+
+        // 设定内部模块压力单位
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetPressureUnit_IPM", null, ct), "设定内部模块压力单位"))) pass = false;
+
+        // 获取压力控制量程范围
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("GetSetPointLimitPressureRange", null, ct), "获取压力控制量程范围"))) pass = false;
+
+        Pressure InnerModulePressureUpper = new Pressure(0, "kPa"); // 量程上限
         Pressure getInternalModulePressure30SFirst = new Pressure(0, "kPa");
         Pressure getInternalModulePressure30SSecond = new Pressure(0, "kPa");
         Pressure getSourcePressure30SFirst = new Pressure(0, "kPa");
         Pressure getSourcePressure30SSecond = new Pressure(0, "kPa");
-        double positiveinternalPressureRate = double.MaxValue;
-        double positiveSupplyPressureRate = double.MaxValue;
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetPressureControlRange_UpperLimit", null, ct))) { op.Report("GetPressureControlRange_UpperLimit 调用失败", RealtimeLevel.Error); pass = false; }
-        else
-        {
-            var upTxt = await op.Dut.QueryTextAsync("GetPressureControlRange_UpperLimit", null, ct);
-            if (double.TryParse(upTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var upVal))
-                InnerModulePressureUpper = new Pressure(upVal, "kPa");
-        }
-        if (!(await ctx.ConfirmAsync("获取内部模块量程上限失败,重试？", ct))) pass = false;
 
-        if (!(await op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureUpper.ToString() }, ct))) { op.Report("SetTargetPressure 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("设置压力目标失败,重试？", ct))) pass = false; { }
-        // 旧 while(true) 轮询 GetPressure_IPM 直到 rate<0.05（控压到位）或超时
+        // 读取量程上限
+        var upTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressureControlRange_UpperLimit", null, ct), "获取内部模块量程上限");
+        if (upTxt is not null && double.TryParse(upTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var upVal))
+            InnerModulePressureUpper = new Pressure(upVal, "kPa");
+        else pass = false;
+
+        // 设置压力目标（上限）
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureUpper.ToString() }, ct), "设置上限压力目标"))) pass = false;
+
+        // 轮询 GetPressure_IPM 直到 rate<0.05（控压到位）或超时
         var upperPollGuard = 0;
         while (true)
         {
@@ -211,107 +240,86 @@ public sealed class LeakTestSingle_BPConST811AHandler : IStepHandler
             rate = Math.Abs((getInternalModulePressureOrg.Value - InnerModulePressureUpper.Value) / InnerModulePressureUpper.Value);
             if (rate < 0.05) { op.Report("上限打压完成"); break; }
             if (++upperPollGuard > 600) { op.Report("上限打压超时(300s)", RealtimeLevel.Warn); pass = false; break; }
-            await Task.Delay(500, ct);
-        }
-        
-        await Task.Delay(2000, ct);
-        
-        if ((await op.Dut.QueryBooleanAsync("SetTestMode", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("设置控制器测量模式失败,重试？", ct))) pass = false;
-        
-        await Task.Delay(50, ct);
-        
-        if ((await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("获取内部模块压力失败,重试？", ct))) pass = false;
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { op.Report("GetPressure_IPM 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await op.Dut.QueryBooleanAsync("GetDev_T", null, ct))) { op.Report("GetDev_T 调用失败", RealtimeLevel.Error); pass = false; }
-        {
-            var pfTxt = await op.Dut.QueryTextAsync("GetPressure_IPM", null, ct);
-            if (double.TryParse(pfTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var pfVal))
-                getInternalModulePressure30SFirst = new Pressure(pfVal, "kPa");
-            tstr = await op.Dut.QueryTextAsync("GetDev_T", null, ct);
-            tvalue += $"{getInternalModulePressure30SFirst.Value},{tstr};";
-            op.Report(tvalue);
+            await op.Sleep(500);
         }
 
-        await Task.Delay(50, ct);
+        await op.Sleep(2000);
 
-        if ((await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("获取内部模块压力失败,重试？", ct))) pass = false;
-        
+        // 设置控制器测量模式
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTestMode", null, ct), "设置控制器测量模式"))) pass = false;
+
+        await op.Sleep(50);
+
+        // 30秒前：读取内部模块压力和温度
+        var pfTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressure_IPM", null, ct), "获取内部模块压力(30秒前)");
+        if (pfTxt is not null && double.TryParse(pfTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var pfVal))
+            getInternalModulePressure30SFirst = new Pressure(pfVal, "kPa");
+        else pass = false;
+        tstr = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetDev_T", null, ct), "获取温度偏差(30秒前)") ?? "";
+        tvalue += $"{getInternalModulePressure30SFirst.Value},{tstr};";
+        op.Report(tvalue);
+
+        await op.Sleep(50);
+
+        // 30秒后：读取内部模块压力
+        var pf2Txt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressure_IPM", null, ct), "获取内部模块压力(30秒后)");
+        if (pf2Txt is not null && double.TryParse(pf2Txt, NumberStyles.Float, CultureInfo.InvariantCulture, out var pf2Val))
+            getInternalModulePressure30SSecond = new Pressure(pf2Val, "kPa");
+        else pass = false;
+
         op.Report($"上限30秒泄露量(新): {string.Format("{0}(ml/min)", LeakFormula.Compute(LeakDeviceModel.Hmp, LeakPosition.PositiveExport, Math.Abs(getInternalModulePressure30SSecond.Value - getInternalModulePressure30SFirst.Value), 30, AtmosSensor.Value))}");
-        positiveinternalPressureRate = Math.Abs((Math.Abs(getInternalModulePressure30SSecond.Value - getInternalModulePressure30SFirst.Value)) / getInternalModulePressure30SFirst.Value);
+        var positiveinternalPressureRate = Math.Abs((Math.Abs(getInternalModulePressure30SSecond.Value - getInternalModulePressure30SFirst.Value)) / getInternalModulePressure30SFirst.Value);
         op.Report($"上限30秒泄露率: {positiveinternalPressureRate.ToString("F4")}");
-        
-        // 30秒前正压气源值
-        if (!(await op.Dut.QueryBooleanAsync("GetSupplyPressure", null, ct))) { op.Report("GetSupplyPressure 调用失败", RealtimeLevel.Error); pass = false; }
-        else
-        {
-            var spFirstTxt = await op.Dut.QueryTextAsync("GetSupplyPressure", null, ct);
-            if (double.TryParse(spFirstTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var spFirstVal))
-                getSourcePressure30SFirst = new Pressure(spFirstVal, "kPa");
-        }
-        if (!(await ctx.ConfirmAsync("获取正压气源压力失败,重试？", ct))) pass = false;
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { op.Report("GetPressure_IPM 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await op.Dut.QueryBooleanAsync("GetDev_T", null, ct))) { op.Report("GetDev_T 调用失败", RealtimeLevel.Error); pass = false; }
-        {
-            var pf2Txt = await op.Dut.QueryTextAsync("GetPressure_IPM", null, ct);
-            if (double.TryParse(pf2Txt, NumberStyles.Float, CultureInfo.InvariantCulture, out var pf2Val))
-                getInternalModulePressure30SFirst = new Pressure(pf2Val, "kPa");
-            tstr = await op.Dut.QueryTextAsync("GetDev_T", null, ct);
-            tvalue += $"{getInternalModulePressure30SFirst.Value},{tstr};";
-            op.Report(tvalue);
-        }
 
-        await Task.Delay(50, ct);
+        // 30秒前正压气源值
+        var spFirstTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetSupplyPressure", null, ct), "获取正压气源压力(30秒前)");
+        if (spFirstTxt is not null && double.TryParse(spFirstTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var spFirstVal))
+            getSourcePressure30SFirst = new Pressure(spFirstVal, "kPa");
+        else pass = false;
+
+        // 30秒前：再次读取内部模块压力和温度
+        pfTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressure_IPM", null, ct), "获取内部模块压力(气源30秒前)");
+        if (pfTxt is not null && double.TryParse(pfTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out pfVal))
+            getInternalModulePressure30SFirst = new Pressure(pfVal, "kPa");
+        else pass = false;
+        tstr = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetDev_T", null, ct), "获取温度偏差(气源30秒前)") ?? "";
+        tvalue += $"{getInternalModulePressure30SFirst.Value},{tstr};";
+        op.Report(tvalue);
+
+        await op.Sleep(50);
 
         // 30秒后正压气源值
-        if (!(await op.Dut.QueryBooleanAsync("GetSupplyPressure", null, ct))) { op.Report("GetSupplyPressure 调用失败", RealtimeLevel.Error); pass = false; }
-        else
-        {
-            var spSecondTxt = await op.Dut.QueryTextAsync("GetSupplyPressure", null, ct);
-            if (double.TryParse(spSecondTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var spSecondVal))
-                getSourcePressure30SSecond = new Pressure(spSecondVal, "kPa");
-        }
-        if (!(await ctx.ConfirmAsync("获取正压气源压力失败,重试？", ct))) pass = false;
-        
-        op.Report($"正压气源压力30秒泄露量(新): {string.Format("{0}(ml/min)", LeakFormula.Compute(LeakDeviceModel.Hmp, LeakPosition.PositiveSource, Math.Abs(getSourcePressure30SSecond.Value - getSourcePressure30SFirst.Value), 30, AtmosSensor.Value))}");
+        var spSecondTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetSupplyPressure", null, ct), "获取正压气源压力(30秒后)");
+        if (spSecondTxt is not null && double.TryParse(spSecondTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var spSecondVal))
+            getSourcePressure30SSecond = new Pressure(spSecondVal, "kPa");
+        else pass = false;
 
-        positiveSupplyPressureRate = Math.Abs((Math.Abs(getSourcePressure30SSecond.Value - getSourcePressure30SFirst.Value)) / getSourcePressure30SFirst.Value);
+        op.Report($"正压气源压力30秒泄露量(新): {string.Format("{0}(ml/min)", LeakFormula.Compute(LeakDeviceModel.Hmp, LeakPosition.PositiveSource, Math.Abs(getSourcePressure30SSecond.Value - getSourcePressure30SFirst.Value), 30, AtmosSensor.Value))}");
+        var positiveSupplyPressureRate = Math.Abs((Math.Abs(getSourcePressure30SSecond.Value - getSourcePressure30SFirst.Value)) / getSourcePressure30SFirst.Value);
         op.Report($"正压气源压力30秒泄露率: {positiveSupplyPressureRate.ToString("F4")}");
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { op.Report("GetPressure_IPM 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("读取当前压力失败,重试？", ct))) pass = false;
-        
-        if (!(await op.Dut.QueryBooleanAsync("SetVentMode", null, ct))) { op.Report("SetVentMode 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("排空失败,重试？", ct))) pass = false;
-        await Task.Delay(3000, ct);
-        await Task.Delay(2000, ct);
-        if (!(await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { op.Report("GetPressure_IPM 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("获取内部模块失败,重试？", ct))) pass = false;
-        
-        Pressure InnerModulePressureLowerer = new Pressure(0, "kPa");//量程上限
+
+        // 排空
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetVentMode", null, ct), "正压排空"))) pass = false;
+        await op.Sleep(3000);
+        await op.Sleep(2000);
+
+        // ============ 下限（负压）测试 ============
+        Pressure InnerModulePressureLowerer = new Pressure(0, "kPa"); // 量程下限
         getInternalModulePressure30SFirst = new Pressure(0, "kPa");
         getInternalModulePressure30SSecond = new Pressure(0, "kPa");
         getSourcePressure30SFirst = new Pressure(0, "kPa");
         getSourcePressure30SSecond = new Pressure(0, "kPa");
-        double negativeinternalPressureRate = double.MaxValue;
-        double negativeSupplyPressureRate = double.MaxValue;
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetPressureControlRange_LowerLimit", null, ct))) { op.Report("GetPressureControlRange_LowerLimit 调用失败", RealtimeLevel.Error); pass = false; }
-        else
-        {
-            var lowTxt = await op.Dut.QueryTextAsync("GetPressureControlRange_LowerLimit", null, ct);
-            if (double.TryParse(lowTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var lowVal))
-                InnerModulePressureLowerer = new Pressure(lowVal, "kPa");
-        }
-        if (!(await ctx.ConfirmAsync("获取内部模块量程下限失败,重试？", ct))) pass = false;
 
-        if (!(await op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureLowerer.ToString() }, ct))) { op.Report("SetTargetPressure 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("设置压力目标失败,重试？", ct))) pass = false;
-        // 旧 while(true) 轮询 GetPressure_IPM 直到 rate<=0.05（控压到位）或超时
+        // 读取量程下限
+        var lowTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressureControlRange_LowerLimit", null, ct), "获取内部模块量程下限");
+        if (lowTxt is not null && double.TryParse(lowTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var lowVal))
+            InnerModulePressureLowerer = new Pressure(lowVal, "kPa");
+        else pass = false;
+
+        // 设置压力目标（下限）
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureLowerer.ToString() }, ct), "设置下限压力目标"))) pass = false;
+
+        // 轮询 GetPressure_IPM 直到 rate<=0.05（控压到位）或超时
         var lowerPollGuard = 0;
         while (true)
         {
@@ -322,82 +330,72 @@ public sealed class LeakTestSingle_BPConST811AHandler : IStepHandler
             rate = Math.Abs((getInternalModulePressureOrg.Value - InnerModulePressureLowerer.Value) / InnerModulePressureLowerer.Value);
             if (rate <= 0.05) { op.Report("下限打压完成"); break; }
             if (++lowerPollGuard > 600) { op.Report("下限打压超时(300s)", RealtimeLevel.Warn); pass = false; break; }
-            await Task.Delay(500, ct);
+            await op.Sleep(500);
         }
-        
-        await Task.Delay(2000, ct);
-        
-        if ((await op.Dut.QueryBooleanAsync("SetTestMode", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("设置控制器测量模式失败,重试？", ct))) pass = false;
-        
-        await Task.Delay(50, ct);
-        
-        if ((await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("获取内部模块压力失败,重试？", ct))) pass = false;
-        
-        await Task.Delay(50, ct);
-        
-        if ((await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("获取内部模块压力失败,重试？", ct))) pass = false;
-        
+
+        await op.Sleep(2000);
+
+        // 设置控制器测量模式
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTestMode", null, ct), "设置控制器测量模式(下限)"))) pass = false;
+
+        await op.Sleep(50);
+
+        // 30秒前：读取内部模块压力
+        pfTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressure_IPM", null, ct), "获取内部模块压力(下限30秒前)");
+        if (pfTxt is not null && double.TryParse(pfTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out pfVal))
+            getInternalModulePressure30SFirst = new Pressure(pfVal, "kPa");
+        else pass = false;
+
+        await op.Sleep(50);
+
+        // 30秒后：读取内部模块压力
+        pf2Txt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressure_IPM", null, ct), "获取内部模块压力(下限30秒后)");
+        if (pf2Txt is not null && double.TryParse(pf2Txt, NumberStyles.Float, CultureInfo.InvariantCulture, out pf2Val))
+            getInternalModulePressure30SSecond = new Pressure(pf2Val, "kPa");
+        else pass = false;
+
         op.Report($"下限30秒泄露量(新): {string.Format("{0}(ml/min)", LeakFormula.Compute(LeakDeviceModel.Hmp, LeakPosition.NegativeExport, Math.Abs(getInternalModulePressure30SSecond.Value - getInternalModulePressure30SFirst.Value), 30, AtmosSensor.Value))}");
-
-        negativeinternalPressureRate = Math.Abs((Math.Abs(getInternalModulePressure30SSecond.Value - getInternalModulePressure30SFirst.Value)) / Math.Abs(100 - getInternalModulePressure30SFirst.Value));
+        var negativeinternalPressureRate = Math.Abs((Math.Abs(getInternalModulePressure30SSecond.Value - getInternalModulePressure30SFirst.Value)) / Math.Abs(100 - getInternalModulePressure30SFirst.Value));
         op.Report($"下限30秒泄露率: {negativeinternalPressureRate.ToString("F4")}");
-        
+
         // 30秒前负压气源值
-        if (!(await op.Dut.QueryBooleanAsync("GetVacuumPressure", null, ct))) { op.Report("GetVacuumPressure 调用失败", RealtimeLevel.Error); pass = false; }
-        else
-        {
-            var vpFirstTxt = await op.Dut.QueryTextAsync("GetVacuumPressure", null, ct);
-            if (double.TryParse(vpFirstTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var vpFirstVal))
-                getSourcePressure30SFirst = new Pressure(vpFirstVal, "kPa");
-        }
-        if (!(await ctx.ConfirmAsync("获取负压气源压力失败,重试？", ct))) pass = false;
+        var vpFirstTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetVacuumPressure", null, ct), "获取负压气源压力(30秒前)");
+        if (vpFirstTxt is not null && double.TryParse(vpFirstTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var vpFirstVal))
+            getSourcePressure30SFirst = new Pressure(vpFirstVal, "kPa");
+        else pass = false;
 
-        if (!(await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { op.Report("GetPressure_IPM 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await op.Dut.QueryBooleanAsync("GetDev_T", null, ct))) { op.Report("GetDev_T 调用失败", RealtimeLevel.Error); pass = false; }
-        {
-            var pf3Txt = await op.Dut.QueryTextAsync("GetPressure_IPM", null, ct);
-            if (double.TryParse(pf3Txt, NumberStyles.Float, CultureInfo.InvariantCulture, out var pf3Val))
-                getInternalModulePressure30SFirst = new Pressure(pf3Val, "kPa");
-            tstr = await op.Dut.QueryTextAsync("GetDev_T", null, ct);
-            tvalue += $"{getInternalModulePressure30SFirst.Value},{tstr};";
-            op.Report(tvalue);
-        }
+        // 30秒前：读取内部模块压力和温度
+        pfTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressure_IPM", null, ct), "获取内部模块压力(负压气源30秒前)");
+        if (pfTxt is not null && double.TryParse(pfTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out pfVal))
+            getInternalModulePressure30SFirst = new Pressure(pfVal, "kPa");
+        else pass = false;
+        tstr = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetDev_T", null, ct), "获取温度偏差(负压气源30秒前)") ?? "";
+        tvalue += $"{getInternalModulePressure30SFirst.Value},{tstr};";
+        op.Report(tvalue);
 
-        await Task.Delay(50, ct);
+        await op.Sleep(50);
 
         // 30秒后负压气源值
-        if (!(await op.Dut.QueryBooleanAsync("GetVacuumPressure", null, ct))) { op.Report("GetVacuumPressure 调用失败", RealtimeLevel.Error); pass = false; }
-        else
-        {
-            var vpSecondTxt = await op.Dut.QueryTextAsync("GetVacuumPressure", null, ct);
-            if (double.TryParse(vpSecondTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var vpSecondVal))
-                getSourcePressure30SSecond = new Pressure(vpSecondVal, "kPa");
-        }
-        if (!(await ctx.ConfirmAsync("获取负压气源压力失败,重试？", ct))) pass = false;
-        
-        op.Report($"负压气源压力30秒泄露量(新): {string.Format("{0}(ml/min)", LeakFormula.Compute(LeakDeviceModel.Hmp, LeakPosition.NegativeSource, Math.Abs(getSourcePressure30SSecond.Value - getSourcePressure30SFirst.Value), 30, AtmosSensor.Value))}");
+        var vpSecondTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetVacuumPressure", null, ct), "获取负压气源压力(30秒后)");
+        if (vpSecondTxt is not null && double.TryParse(vpSecondTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var vpSecondVal))
+            getSourcePressure30SSecond = new Pressure(vpSecondVal, "kPa");
+        else pass = false;
 
-        negativeSupplyPressureRate = Math.Abs((Math.Abs(getSourcePressure30SSecond.Value - getSourcePressure30SFirst.Value)) / Math.Abs(100 - getSourcePressure30SFirst.Value));
+        op.Report($"负压气源压力30秒泄露量(新): {string.Format("{0}(ml/min)", LeakFormula.Compute(LeakDeviceModel.Hmp, LeakPosition.NegativeSource, Math.Abs(getSourcePressure30SSecond.Value - getSourcePressure30SFirst.Value), 30, AtmosSensor.Value))}");
+        var negativeSupplyPressureRate = Math.Abs((Math.Abs(getSourcePressure30SSecond.Value - getSourcePressure30SFirst.Value)) / Math.Abs(100 - getSourcePressure30SFirst.Value));
         op.Report($"负压气源压力30秒泄露率: {negativeSupplyPressureRate.ToString("F4")}");
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { op.Report("GetPressure_IPM 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("读取当前压力失败,重试？", ct))) pass = false;
-        if (!(await op.Dut.QueryBooleanAsync("SetVentMode", null, ct))) { op.Report("SetVentMode 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("排空失败,重试？", ct))) pass = false;
-        await Task.Delay(5000, ct);
-        
-        if (!(await op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct))) { op.Report("GetPressure_IPM 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("获取内部模块失败,重试？", ct))) pass = false;
-        
-        await Task.Delay(2000, ct);
+
+        // 排空
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetVentMode", null, ct), "负压排空"))) pass = false;
+        await op.Sleep(5000);
+
+        // 关闭模块稳定监控
         await op.Dut.CommandAsync("SetVentMode", null, ct);
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_H", "Close" }, ct);
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_L", "Close" }, ct);
-        
-        op.Report(pass ? "✓ 高压量程压力泄露测试和排空测试通过" : "✗ 高压量程压力泄露测试和排空测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+
+        if (pass) op.Ok("高压量程压力泄露测试和排空测试通过");
+        else op.Fail("高压量程压力泄露测试和排空测试未通过");
         return pass ? StepResult.Pass("高压量程压力泄露测试和排空测试通过") : StepResult.Fail("高压量程压力泄露测试和排空测试未通过");
     }
 }
@@ -413,51 +411,43 @@ public sealed class PressureControlTest_BPConST811AHandler : IStepHandler
     public string? DeviceFamily => "ConST811A_BP_Machine";
 
     /// <summary>执行本测试项。</summary>
-    /// <param name="ctx">测试项上下文。</param>
-    /// <param name="ct">取消令牌。</param>
-    /// <returns>测试项结果。</returns>
     public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
     {
         var op = new ConST811AOps(ctx, ct);
         var pass = true;
-        
-        await Task.Delay(500, ct);
-        //获取条件
-        //控压最大用时
+
+        await op.Sleep(500);
+
         Pressure setInnerPressure = new Pressure(0, "kPa");
         Pressure InnerModulePressureUpper = new Pressure(0, "kPa");
         Pressure InnerModulePressureLowerer = new Pressure(0, "kPa");
-        double pressureStabilityValue = 0.003; //压力稳定误差
-        List<double> postiveSetPoint = new List<double>() { 0, 0.05, 1, 0.95 };   //正压设定点 0，5%FS，100%，95%
-        List<double> negativeSetPoint = new List<double>() { 0.05, 1, 0.9 };  //负压设定点0，5%-FS,-FS,90%-FS,0
-        
+        double pressureStabilityValue = 0.003; // 压力稳定误差
+        List<double> postiveSetPoint = new List<double>() { 0, 0.05, 1, 0.95 };   // 正压设定点 0，5%FS，100%，95%
+        List<double> negativeSetPoint = new List<double>() { 0.05, 1, 0.9 };  // 负压设定点
+
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_H", "Open" }, ct);
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_L", "Open" }, ct);
+
         // 控压时间与允差条件
         var PositivePressControlTime = op.Cond("正压控压时间");
         var PositivePressControlTime2 = op.Cond("正压5%HP->105%HP控压时间");
         var NegativePressControlTime = op.Cond("负压控压时间");
         var NegativePressControlTime2 = op.Cond("负压5%HP->105%HP控压时间");
-        var PositivePressControlToleranceValue = op.Cond("正压设定点控压允差");
-        var NegativePressControlToleranceValue = op.Cond("负压设定点控压允差");
 
-        if ((await op.Dut.QueryBooleanAsync("SetPressureUnit_IPM", null, ct))) { /* 旧脚本成功分支（展示/控制流）已省略 */ }
-        if (!(await ctx.ConfirmAsync("设定内部模块压力单位失败,重试？", ct))) pass = false;
+        // 设定内部模块压力单位
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetPressureUnit_IPM", null, ct), "设定内部模块压力单位"))) pass = false;
 
-        if (!(await op.Dut.QueryBooleanAsync("SetPressureStability", new[]{ pressureStabilityValue.ToString() }, ct))) { op.Report("SetPressureStability 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("设置压力稳定度失败,重试？", ct))) pass = false;
+        // 设置压力稳定度
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetPressureStability", new[]{ pressureStabilityValue.ToString() }, ct), "设置压力稳定度"))) pass = false;
 
-        if (!(await op.Dut.QueryBooleanAsync("SetOpenMaxControlPressureSpeed", new[]{ "false" }, ct))) { op.Report("SetOpenMaxControlPressureSpeed 调用失败", RealtimeLevel.Error); pass = false; }
-        if (!(await ctx.ConfirmAsync("设置控压速率失败,重试？", ct))) pass = false;
+        // 设置控压速率
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetOpenMaxControlPressureSpeed", new[]{ "false" }, ct), "设置控压速率"))) pass = false;
 
-        if (!(await op.Dut.QueryBooleanAsync("GetPressureControlRange_UpperLimit", null, ct))) { op.Report("GetPressureControlRange_UpperLimit 调用失败", RealtimeLevel.Error); pass = false; }
-        else
-        {
-            var upTxt = await op.Dut.QueryTextAsync("GetPressureControlRange_UpperLimit", null, ct);
-            if (double.TryParse(upTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var upVal))
-                InnerModulePressureUpper = new Pressure(upVal, "kPa");
-        }
-        if (!(await ctx.ConfirmAsync("获取内部模块正压满量程失败,重试？", ct))) pass = false;
+        // 读取量程上限
+        var upTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressureControlRange_UpperLimit", null, ct), "获取内部模块正压满量程");
+        if (upTxt is not null && double.TryParse(upTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var upVal))
+            InnerModulePressureUpper = new Pressure(upVal, "kPa");
+        else pass = false;
         op.Report($"内部模块量程上限: {InnerModulePressureUpper.ToString()}");
 
         // 正压控压过程：遍历正压设定点（0, 5%FS, 100%FS, 95%FS）
@@ -468,31 +458,27 @@ public sealed class PressureControlTest_BPConST811AHandler : IStepHandler
             var starTimePressUp = DateTime.Now;
             // 重新读取量程上限并计算该设定点目标压力
             {
-                var upTxt = await op.Dut.QueryTextAsync("GetPressureControlRange_UpperLimit", null, ct);
-                if (double.TryParse(upTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var upVal))
-                    InnerModulePressureUpper = new Pressure(upVal, "kPa");
+                var upTxt2 = await op.Dut.QueryTextAsync("GetPressureControlRange_UpperLimit", null, ct);
+                if (double.TryParse(upTxt2, NumberStyles.Float, CultureInfo.InvariantCulture, out var upVal2))
+                    InnerModulePressureUpper = new Pressure(upVal2, "kPa");
             }
             double resultValue = Math.Floor((100 + (InnerModulePressureUpper.Value - 100) * postiveSetPoint[i]));
             op.Report($"压力点{postiveSetPoint[i]}*FS: {resultValue}{InnerModulePressureUpper.Unit}");
-            // setInnerPressure = new Pressure(resultValue, InnerModulePressureUpper.Unit)
             setInnerPressure = new Pressure(resultValue, InnerModulePressureUpper.Unit);
-            if (!(await op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ setInnerPressure.ToString() }, ct))) { op.Report("SetTargetPressure 调用失败", RealtimeLevel.Error); pass = false; }
-            if (!(await ctx.ConfirmAsync($"设定{resultValue}{InnerModulePressureUpper.Unit}压力值失败,重试？", ct))) { pass = false; break; }
-            // isControlLangRange = (postiveSetPoint[i] == 1)
+            // 设置压力目标
+            if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ setInnerPressure.ToString() }, ct), $"设定{resultValue}{InnerModulePressureUpper.Unit}压力值"))) { pass = false; break; }
             bool isControlLangRange = postiveSetPoint[i] == 1;
             // 控压情况轮询：直到稳定且在允差内或超时
             var pollGuard = 0;
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
-                // PressureStableState state = PressureStableState.UnKnown
                 string stateTxt = await op.Dut.QueryTextAsync("GetPressureStableState", null, ct);
                 bool isStable = stateTxt.Contains("Stable", StringComparison.OrdinalIgnoreCase);
                 var ipmTxt = await op.Dut.QueryTextAsync("GetPressure_IPM", null, ct);
                 double pressureVal = 0;
                 if (double.TryParse(ipmTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var pv))
                     pressureVal = pv;
-                // if (!GetPressureStableState(out state) || state != Stable || !Judge("正压设定点控压允差", Math.Abs(pressure.Value - resultValue)))
                 bool toleranceOk = op.Judge("正压设定点控压允差", Math.Abs(pressureVal - resultValue), "正压控压允差", "%");
                 if (isStable && toleranceOk)
                 {
@@ -512,19 +498,16 @@ public sealed class PressureControlTest_BPConST811AHandler : IStepHandler
                     break;
                 }
                 if (++pollGuard > 1200) { op.Report($"控压超时({resultValue}{InnerModulePressureUpper.Unit})", RealtimeLevel.Warn); pass = false; i++; break; }
-                await Task.Delay(500, ct);
+                await op.Sleep(500);
             }
         }
         await op.Dut.CommandAsync("SetVentMode", null, ct);
 
-        if (!(await op.Dut.QueryBooleanAsync("GetPressureControlRange_LowerLimit", null, ct))) { op.Report("GetPressureControlRange_LowerLimit 调用失败", RealtimeLevel.Error); pass = false; }
-        else
-        {
-            var lowTxt = await op.Dut.QueryTextAsync("GetPressureControlRange_LowerLimit", null, ct);
-            if (double.TryParse(lowTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var lowVal))
-                InnerModulePressureLowerer = new Pressure(lowVal, "kPa");
-        }
-        if (!(await ctx.ConfirmAsync("获取内部模块量程下限失败,重试？", ct))) pass = false;
+        // 读取量程下限
+        var lowTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetPressureControlRange_LowerLimit", null, ct), "获取内部模块量程下限");
+        if (lowTxt is not null && double.TryParse(lowTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var lowVal))
+            InnerModulePressureLowerer = new Pressure(lowVal, "kPa");
+        else pass = false;
         op.Report($"内部模块设定点下限: {InnerModulePressureLowerer.ToString()}");
 
         await op.Dut.CommandAsync("GetPressureLowerer_IPM", null, ct);
@@ -537,26 +520,21 @@ public sealed class PressureControlTest_BPConST811AHandler : IStepHandler
             var starTimePressDown = DateTime.Now;
             double resultValue = Math.Ceiling(100 + (InnerModulePressureLowerer.Value - 100) * negativeSetPoint[j]);
             op.Report($"压力点{negativeSetPoint[j]}*FS: {resultValue:F2}{InnerModulePressureLowerer.Unit}");
-            // setInnerPressure = new Pressure(resultValue, InnerModulePressureLowerer.Unit)
             setInnerPressure = new Pressure(resultValue, InnerModulePressureLowerer.Unit);
-            if (!(await op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ setInnerPressure.ToString() }, ct))) { op.Report("SetTargetPressure 调用失败", RealtimeLevel.Error); pass = false; }
-            if (!(await ctx.ConfirmAsync($"设定{resultValue:F2}{InnerModulePressureLowerer.Unit}压力值失败,重试？", ct))) { pass = false; break; }
-            // isControlLangRange = (negativeSetPoint[j] == 1)
+            // 设置压力目标
+            if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ setInnerPressure.ToString() }, ct), $"设定{resultValue:F2}{InnerModulePressureLowerer.Unit}压力值"))) { pass = false; break; }
             bool isControlLangRange = negativeSetPoint[j] == 1;
             // 控压情况轮询
             var pollGuard = 0;
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
-                // Xmas11.Comm.Data.Common.PressureStableState state = UnKnown
                 string stateTxt = await op.Dut.QueryTextAsync("GetPressureStableState", null, ct);
                 bool isStable = stateTxt.Contains("Stable", StringComparison.OrdinalIgnoreCase);
-                // Xmas11.Domain.Mechanics.Pressure pressure = new Pressure(0, kPa)
                 var ipmTxt = await op.Dut.QueryTextAsync("GetPressure_IPM", null, ct);
                 double pressureVal = 0;
                 if (double.TryParse(ipmTxt, NumberStyles.Float, CultureInfo.InvariantCulture, out var pv))
                     pressureVal = pv;
-                // if (!GetPressureStableState(out state) || state != Stable || !Judge("负压设定点控压允差", Math.Abs(pressure.Value - resultValue)))
                 bool toleranceOk = op.Judge("负压设定点控压允差", Math.Abs(pressureVal - resultValue), "负压控压允差", "%");
                 if (isStable && toleranceOk)
                 {
@@ -575,19 +553,20 @@ public sealed class PressureControlTest_BPConST811AHandler : IStepHandler
                     break;
                 }
                 if (++pollGuard > 6000) { op.Report($"控压超时({resultValue}{InnerModulePressureLowerer.Unit})", RealtimeLevel.Warn); pass = false; j++; break; }
-                await Task.Delay(100, ct);
+                await op.Sleep(100);
             }
         }
         await op.Dut.CommandAsync("SetVentMode", null, ct);
 
-        await Task.Delay(1000, ct);
+        await op.Sleep(1000);
 
         await op.Dut.CommandAsync("SetOpenMaxControlPressureSpeed", new[]{ "false" }, ct);
         await op.Dut.CommandAsync("SetVentMode", null, ct);
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_H", "Close" }, ct);
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_L", "Close" }, ct);
 
-        op.Report(pass ? "✓ 压力控制测试通过" : "✗ 压力控制测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+        if (pass) op.Ok("压力控制测试通过");
+        else op.Fail("压力控制测试未通过");
         return pass ? StepResult.Pass("压力控制测试通过") : StepResult.Fail("压力控制测试未通过");
     }
 }

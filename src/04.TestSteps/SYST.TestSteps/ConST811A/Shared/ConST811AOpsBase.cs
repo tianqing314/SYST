@@ -66,6 +66,76 @@ internal class ConST811AOpsBase
             Report($"  {name} = FAIL ✗", RealtimeLevel.Error);
     }
 
+    /// <summary>
+    /// 执行设备指令并自动重试（替代旧脚本 goto tryagain + OpenInfoConfirmWindow 模式）。
+    /// 失败时仅记录日志，不弹窗。最多重试 maxRetries 次（含首次），每次间隔 1 秒。
+    /// </summary>
+    /// <param name="action">返回 true=成功。</param>
+    /// <param name="desc">操作描述（用于日志）。</param>
+    /// <param name="maxRetries">最大尝试次数（含首次）。</param>
+    /// <returns>true=某次成功；false=全部失败。</returns>
+    public async Task<bool> TryCommand(Func<Task<bool>> action, string desc, int maxRetries = 3)
+    {
+        for (var attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            _ct.ThrowIfCancellationRequested();
+            if (await action())
+            {
+                Report($"✓ {desc}");
+                return true;
+            }
+            Fail($"{desc}失败(第{attempt}次)");
+            if (attempt < maxRetries) await Task.Delay(1000, _ct);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 执行设备查询并读取返回值（自动重试）。失败时返回 null。
+    /// </summary>
+    /// <param name="query">查询动作（返回文本值，null/空=失败）。</param>
+    /// <param name="desc">操作描述。</param>
+    /// <param name="maxRetries">最大尝试次数。</param>
+    /// <returns>成功返回值；失败返回 null。</returns>
+    public async Task<string?> TryQueryValue(Func<Task<string>> query, string desc, int maxRetries = 3)
+    {
+        for (var attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            _ct.ThrowIfCancellationRequested();
+            var val = await query();
+            if (!string.IsNullOrWhiteSpace(val))
+            {
+                Report($"✓ {desc}: {val}");
+                return val;
+            }
+            Fail($"{desc}失败(第{attempt}次)");
+            if (attempt < maxRetries) await Task.Delay(1000, _ct);
+        }
+        return null;
+    }
+
+    /// <summary>按名取条件（找不到返回 null）。</summary>
+    public ConditionDescriptor? Cond(string name)
+    {
+        foreach (var c in _ctx.Conditions)
+            if (c.Name == name) return c;
+        return null;
+    }
+
+    /// <summary>对某测量值按指定条件名判定并返回是否通过。</summary>
+    public bool Judge(string condName, double value, string label, string unit)
+    {
+        var cond = Cond(condName);
+        if (cond is null)
+        {
+            Report($"{label} {F(value)}{unit}：缺少判定条件 {condName}", RealtimeLevel.Warn);
+            return false;
+        }
+        var r = _ctx.Evaluator.Evaluate(cond, value);
+        Report($"{label} {F(value)}{unit}：{r.Message}", r.Passed ? RealtimeLevel.Info : RealtimeLevel.Warn);
+        return r.Passed;
+    }
+
     /// <summary>延迟（子类可重写以支持仿真模式跳过）。</summary>
     public virtual async Task Sleep(int ms)
     {
