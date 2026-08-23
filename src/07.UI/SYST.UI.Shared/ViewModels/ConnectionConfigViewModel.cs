@@ -158,6 +158,12 @@ public partial class ConnectionConfigViewModel : ObservableObject
     public bool HasStandardModules => StandardModules.Count > 0;
 
     /// <summary>
+    /// 默认选中的 Tab 索引：无共享设备（标准模块）时直接定位到「被检连接」Tab，
+    /// 避免空白（折叠的共享设备 Tab 仍被 TabControl 默认选中时内容区不渲染）。
+    /// </summary>
+    public int SelectedTabIndex => HasStandardModules ? 0 : 1;
+
+    /// <summary>
     /// 被检连接行集合（按号位）；针床工装模式下承载针床工装子设备行。
     /// </summary>
     public ObservableCollection<CommRowViewModel> Duts { get; } = [];

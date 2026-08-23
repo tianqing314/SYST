@@ -265,7 +265,7 @@
             Padding="0"
             ClipToBounds="True"
             Style="{StaticResource Card.Std}">
-            <TabControl Background="Transparent">
+            <TabControl Background="Transparent" SelectedIndex="{Binding SelectedTabIndex, Mode=OneWay}">
                 <!--  共享设备（标准模块）：未配置（.shared.json / manifest 均为空）时隐藏，只显示被检连接  -->
                 <TabItem
                     Header="共享设备（通用）"
