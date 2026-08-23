@@ -1,0 +1,405 @@
+{
+  "Key": "ConST660_TH_SelfCheck_Machine",
+  "DeviceFamily": "T01",
+  "BoardName": "ConST660 高温炉整机自检",
+  "Description": "ConST660 高温炉整机自检测试（TH 变体）",
+  "Dut": {
+    "Name": "ConST660",
+    "Model": "ConST660",
+    "ProductModel": "ConST660"
+  },
+  "Positions": [
+    {
+      "Index": 1,
+      "Name": "1号位"
+    }
+  ],
+  "Steps": [
+    {
+      "Key": "PowerOnOffTest",
+      "Kind": "PowerOnOffTest",
+      "Name": "开关机测试",
+      "Description": "人工观察并确认设备开关机正常",
+      "StepType": "Manual",
+      "TimeoutMs": 120000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "3fa8deda-12a2-4a54-9815-6f9ed91585db"
+    },
+    {
+      "Key": "TestWriteSN",
+      "Kind": "TestWriteSN",
+      "Name": "SN号写入",
+      "Description": "写入整机 SN 号并核对",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入SN",
+          "Value": "",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "2f90a841-61d7-4519-86f0-3427ce0c9595"
+    },
+    {
+      "Key": "TestWriteDevType",
+      "Kind": "TestWriteDevType",
+      "Name": "型号写入",
+      "Description": "写入整机型号并核对",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入型号",
+          "Value": "ConST660",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "5fba31a8-65c9-42d9-85cd-fbe24ccc73b3"
+    },
+    {
+      "Key": "TestSoftVersions",
+      "Kind": "TestSoftVersions",
+      "Name": "软件版本验证及升级",
+      "Description": "验证整机主程序、系统板、测量板软件版本",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "f5044ba9-3c69-4c04-8f8d-2fd9e153d616"
+    },
+    {
+      "Key": "LCDBadPixelTest",
+      "Kind": "LCDBadPixelTest",
+      "Name": "LCD液晶屏",
+      "Description": "显示边缘为白边框的红绿蓝白黑颜色，最后一个确定按钮",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "31b6f0cc-8598-4324-8b52-b9c93c3505bb"
+    },
+    {
+      "Key": "LCDTouchTest",
+      "Kind": "LCDTouchTest",
+      "Name": "触摸屏",
+      "Description": "手指画线，线段跟随手指且不断为正常",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a984a74e-0c94-4f87-b42c-d050308cc425"
+    },
+    {
+      "Key": "TestSpeaker",
+      "Kind": "TestSpeaker",
+      "Name": "扬声器",
+      "Description": "点击屏幕扬声器响一声",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "2197fdf5-3327-4d44-9f2f-9080a1382d74"
+    },
+    {
+      "Key": "TestElectricalCom0",
+      "Kind": "TestElectricalCom0",
+      "Name": "通讯口COM0",
+      "Description": "用 6 号 CPPI 指令读电测板版本信息，能读到为正常",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "4bd096d9-eba4-4d53-ac95-40962bcada98"
+    },
+    {
+      "Key": "TestElectricalIO",
+      "Kind": "TestElectricalIO",
+      "Name": "电测板上电IO口",
+      "Description": "电测板断电后读不到版本信息，上电后能读到为正常",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "61194000-e9b8-4715-b90c-f535b435d29c"
+    },
+    {
+      "Key": "TestControllerCom3",
+      "Kind": "TestControllerCom3",
+      "Name": "通讯口COM3",
+      "Description": "用 6 号 CPPI 指令读控制板版本信息，能读到为正常",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "10bf9b9d-7286-4ac2-8430-a1a52d2b3c24"
+    },
+    {
+      "Key": "TestControllerIO",
+      "Kind": "TestControllerIO",
+      "Name": "控制板上电IO口",
+      "Description": "控制板断电后读不到版本信息，上电后能读到为正常",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "dbb90295-8573-41ed-9932-9a8744cdd92d"
+    },
+    {
+      "Key": "TestWriteRange",
+      "Kind": "TestWriteRange",
+      "Name": "量程写入",
+      "Description": "写入整机量程（高温炉 33~660℃），并核对",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "下限",
+          "Value": "33.0",
+          "Unit": null
+        },
+        {
+          "Name": "上限",
+          "Value": "660.0",
+          "Unit": null
+        },
+        {
+          "Name": "单位",
+          "Value": "℃",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "e2afb256-86e1-4779-8e48-6d8a36bf2666"
+    },
+    {
+      "Key": "SystemVoltageTest",
+      "Kind": "SystemVoltageTest",
+      "Name": "系统电压",
+      "Description": "ADC 驱动读取系统电压（25~31V 为正常）",
+      "Settings": {
+        "Point": "SystemVoltage"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "范围",
+          "Min": 25.0,
+          "Max": 31.0,
+          "Unit": "V"
+        }
+      ],
+      "Guid": "a1b2c3d4-0001-4a54-9815-6f9ed9158501"
+    },
+    {
+      "Key": "TestSystem5Voltage",
+      "Kind": "SystemVoltageTest",
+      "Name": "5V电压测试",
+      "Description": "ADC 驱动读取 5V 电压（4.5~5.5V 为正常）",
+      "Settings": {
+        "Point": "System5V"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "范围",
+          "Min": 4.5,
+          "Max": 5.5,
+          "Unit": "V"
+        }
+      ],
+      "Guid": "a1b2c3d4-0002-4a54-9815-6f9ed9158502"
+    },
+    {
+      "Key": "TestSystem12Voltage",
+      "Kind": "SystemVoltageTest",
+      "Name": "12V背光电压测试",
+      "Description": "ADC 驱动读取 12V 背光电压（11~13V 为正常）",
+      "Settings": {
+        "Point": "System12V"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "范围",
+          "Min": 11.0,
+          "Max": 13.0,
+          "Unit": "V"
+        }
+      ],
+      "Guid": "a1b2c3d4-0003-4a54-9815-6f9ed9158503"
+    },
+    {
+      "Key": "TestSystem3_3Voltage",
+      "Kind": "SystemVoltageTest",
+      "Name": "3.3V电压测试",
+      "Description": "ADC 驱动读取 3.3V 电压（3.0~3.6V 为正常）",
+      "Settings": {
+        "Point": "System3_3V"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "范围",
+          "Min": 3.0,
+          "Max": 3.6,
+          "Unit": "V"
+        }
+      ],
+      "Guid": "a1b2c3d4-0004-4a54-9815-6f9ed9158504"
+    },
+    {
+      "Key": "TestUSBPrincipal",
+      "Kind": "TestUSBPrincipal",
+      "Name": "USB主口",
+      "Description": "往 U 盘写一测试文件，读文件比较内容",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入数据",
+          "Value": "testData010101-usb",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "67e30a4f-1a2f-414e-a147-a1227a660a39"
+    },
+    {
+      "Key": "TestUSBSubordinate",
+      "Kind": "TestUSBSubordinate",
+      "Name": "USB从口",
+      "Description": "指令测试 USB 从通讯是否正常",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0005-4a54-9815-6f9ed9158505"
+    },
+    {
+      "Key": "TestStorageCardPrincipal",
+      "Kind": "TestStorageCardPrincipal",
+      "Name": "SD卡测试",
+      "Description": "往 SD 卡写一测试文件读回比对",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入数据",
+          "Value": "testData010101-sd",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0006-4a54-9815-6f9ed9158506"
+    },
+    {
+      "Key": "TestClock",
+      "Kind": "TestClock",
+      "Name": "实时时钟测试",
+      "Description": "读写时钟并提示结果",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0007-4a54-9815-6f9ed9158507"
+    },
+    {
+      "Key": "TestWifi",
+      "Kind": "TestWifi",
+      "Name": "wifi测试",
+      "Description": "连接指定无线网络并通讯测试",
+      "StepType": "Auto",
+      "TimeoutMs": 30000,
+      "Parameters": [
+        {
+          "Name": "SSID",
+          "Value": "CONSTSC",
+          "Unit": null
+        },
+        {
+          "Name": "EncryptionMode",
+          "Value": "WPA_PSK_AES",
+          "Unit": null
+        },
+        {
+          "Name": "Password",
+          "Value": "4001131199",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0008-4a54-9815-6f9ed9158508"
+    },
+    {
+      "Key": "TestBluetooth",
+      "Kind": "TestBluetooth",
+      "Name": "蓝牙测试",
+      "Description": "读取蓝牙模块状态或固件版本或 MAC 码",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0009-4a54-9815-6f9ed9158509"
+    },
+    {
+      "Key": "TestControlTemperature",
+      "Kind": "TestControlTemperature",
+      "Name": "高温控制测试",
+      "Description": "设定目标温度 660℃ 与波动度，温度在 15min 内达到 650℃ 并在 25min 内稳定为正常",
+      "StepType": "Process",
+      "TimeoutMs": 1800000,
+      "Parameters": [
+        {
+          "Name": "目标温度",
+          "Value": "660.0",
+          "Unit": "℃"
+        },
+        {
+          "Name": "波动度",
+          "Value": "0.05",
+          "Unit": "℃"
+        }
+      ],
+      "Conditions": [],
+      "Guid": "ffe1fdb5-d2cc-4a3f-bf8d-df6d5db3f334"
+    },
+    {
+      "Key": "TestControlTemperature2",
+      "Kind": "TestControlTemperature2",
+      "Name": "回室温",
+      "Description": "设定目标温度 50℃ 与波动度，温度在 25min 内回落到 25~75℃ 为正常",
+      "StepType": "Process",
+      "TimeoutMs": 1800000,
+      "Parameters": [
+        {
+          "Name": "目标温度",
+          "Value": "50.0",
+          "Unit": "℃"
+        },
+        {
+          "Name": "波动度",
+          "Value": "0.05",
+          "Unit": "℃"
+        }
+      ],
+      "Conditions": [],
+      "Guid": "b07b010e-786f-4f23-b24b-907b7efda574"
+    }
+  ]
+}

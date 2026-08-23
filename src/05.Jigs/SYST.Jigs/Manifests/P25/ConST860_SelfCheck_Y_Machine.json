@@ -1,0 +1,361 @@
+{
+  "Key": "ConST860_SelfCheck_Y",
+  "DeviceFamily": "P25",
+  "BoardName": "液压整机自检",
+  "Description": "ConST860 液压（Y）整机自检测试（自动转换自旧平台 ConST860_SelfCheckTest_Y_Task.json）",
+  "Dut": {
+    "Name": "ConST860",
+    "Model": "ConST860",
+    "ProductModel": "ConST860"
+  },
+  "Positions": [
+    { "Index": 1, "Name": "1号位" }
+  ],
+  "Steps": [
+    {
+      "Key": "ConST860SelfCheck",
+      "Kind": "ConST860SelfCheck",
+      "Name": "整机自检",
+      "Description": "连接、序列号、固件版本、设备自检异常查询",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0000-478e-8842-d5a8e923b001"
+    },
+    {
+      "Key": "SN_Write",
+      "Kind": "SN_Write",
+      "Name": "SN号写入",
+      "Description": "写入整机 SN 号并核对",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        { "Name": "写入SN", "Value": "", "Unit": null }
+      ],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0001-478e-8842-d5a8e923b002"
+    },
+    {
+      "Key": "Type_WriteWithPressureRange",
+      "Kind": "Type_WriteWithPressureRange",
+      "Name": "型号写入",
+      "Description": "写入整机型号与压力量程并核对",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        { "Name": "写入型号", "Value": "ConST860", "Unit": null },
+        { "Name": "量程下限", "Value": "-100", "Unit": "kPa" },
+        { "Name": "量程上限", "Value": "6000", "Unit": "kPa" }
+      ],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0002-478e-8842-d5a8e923b003"
+    },
+    {
+      "Key": "TestSoftVersions",
+      "Kind": "TestSoftVersions",
+      "Name": "软件版本验证",
+      "Description": "验证主程序/系统/控制板版本",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0003-478e-8842-d5a8e923b004"
+    },
+    {
+      "Key": "TestMedium",
+      "Kind": "TestMedium",
+      "Name": "介质写入",
+      "Description": "写入介质类型（液压：油）",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        { "Name": "介质", "Value": "油", "Unit": null }
+      ],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0004-478e-8842-d5a8e923b005"
+    },
+    {
+      "Key": "ScreenDefectsTest",
+      "Kind": "ScreenDefectsTest",
+      "Name": "屏幕坏点测试",
+      "Description": "屏幕坏点 Checker 轮询",
+      "StepType": "Auto",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0005-478e-8842-d5a8e923b006"
+    },
+    {
+      "Key": "ScreenTouchTest",
+      "Kind": "ScreenTouchTest",
+      "Name": "屏幕触摸测试",
+      "Description": "屏幕触摸 Checker 轮询",
+      "StepType": "Auto",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0006-478e-8842-d5a8e923b007"
+    },
+    {
+      "Key": "ScreenBrightnessTest",
+      "Kind": "ScreenBrightnessTest",
+      "Name": "屏幕亮度测试",
+      "Description": "设置屏幕亮度并回读",
+      "Settings": { "Level": "100" },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0007-478e-8842-d5a8e923b008"
+    },
+    {
+      "Key": "BeeperTest",
+      "Kind": "BeeperTest",
+      "Name": "蜂鸣器测试",
+      "Description": "蜂鸣器 Checker 轮询",
+      "StepType": "Auto",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0008-478e-8842-d5a8e923b009"
+    },
+    {
+      "Key": "FANTest",
+      "Kind": "FANTest",
+      "Name": "主机风扇测试",
+      "Description": "风扇 Checker 轮询",
+      "StepType": "Auto",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0009-478e-8842-d5a8e923b010"
+    },
+    {
+      "Key": "TestLAN",
+      "Kind": "TestLAN",
+      "Name": "网口通讯",
+      "Description": "静态以太网 IP 检查",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0010-478e-8842-d5a8e923b011"
+    },
+    {
+      "Key": "ModuleConnectStateTest",
+      "Kind": "ModuleConnectStateTest",
+      "Name": "外接压力模块通讯测试",
+      "Description": "外接压力模块在线状态检查",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0011-478e-8842-d5a8e923b012"
+    },
+    {
+      "Key": "TestUSBPrincipal",
+      "Kind": "TestUSBPrincipal",
+      "Name": "U盘测试",
+      "Description": "U盘写入读出比对",
+      "StepType": "Auto",
+      "TimeoutMs": 30000,
+      "Parameters": [
+        { "Name": "写入数据", "Value": "testData010101-usb", "Unit": null }
+      ],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0012-478e-8842-d5a8e923b013"
+    },
+    {
+      "Key": "TimeTest",
+      "Kind": "TimeTest",
+      "Name": "时间测试",
+      "Description": "系统时钟读写比对",
+      "StepType": "Auto",
+      "TimeoutMs": 10000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0013-478e-8842-d5a8e923b014"
+    },
+    {
+      "Key": "TestInnerModule",
+      "Kind": "TestInnerModule",
+      "Name": "内置模块通讯测试",
+      "Description": "液压内置模块信息读取",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0014-478e-8842-d5a8e923b015"
+    },
+    {
+      "Key": "ExternalLoopTest",
+      "Kind": "ExternalLoopTest",
+      "Name": "液压外循环测试",
+      "Description": "液泵调速至80%，外循环激活检测",
+      "StepType": "Auto",
+      "TimeoutMs": 30000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0015-478e-8842-d5a8e923b016"
+    },
+    {
+      "Key": "HeightTest",
+      "Kind": "HeightTest",
+      "Name": "高压泄露测试",
+      "Description": "充压至高压，测泄露率后泄压",
+      "StepType": "Auto",
+      "TimeoutMs": 120000,
+      "Parameters": [],
+      "Conditions": [
+        { "Kind": "Range", "Name": "高压泄露量", "Min": 0, "Max": 2.5, "Unit": "kPa/min" }
+      ],
+      "Guid": "a1b2c3d4-0016-478e-8842-d5a8e923b017"
+    },
+    {
+      "Key": "LowTest",
+      "Kind": "LowTest",
+      "Name": "低压泄露测试",
+      "Description": "充压至低压，测泄露率后泄压",
+      "StepType": "Auto",
+      "TimeoutMs": 120000,
+      "Parameters": [],
+      "Conditions": [
+        { "Kind": "Range", "Name": "低压泄露量", "Min": 0, "Max": 2.5, "Unit": "kPa/min" }
+      ],
+      "Guid": "a1b2c3d4-0017-478e-8842-d5a8e923b018"
+    },
+    {
+      "Key": "TestPressureControl_CompleteTest",
+      "Kind": "TestPressureControl_CompleteTest",
+      "Name": "控压测试",
+      "Description": "带载控压至目标值，判定偏差",
+      "Settings": { "TargetKpa": "2500" },
+      "StepType": "Auto",
+      "TimeoutMs": 120000,
+      "Parameters": [],
+      "Conditions": [
+        { "Kind": "Range", "Name": "控压允差", "Min": 0, "Max": 25, "Unit": "kPa" }
+      ],
+      "Guid": "a1b2c3d4-0018-478e-8842-d5a8e923b019"
+    },
+    {
+      "Key": "TestSelfTuning",
+      "Kind": "TestSelfTuning",
+      "Name": "自整定",
+      "Description": "启动自整定并读取结果",
+      "StepType": "Auto",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0019-478e-8842-d5a8e923b020"
+    },
+    {
+      "Key": "ReadSelfTuningPar",
+      "Kind": "ReadSelfTuningPar",
+      "Name": "自整定后阀参数",
+      "Description": "读取自整定后的阀参数",
+      "StepType": "Auto",
+      "TimeoutMs": 10000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0020-478e-8842-d5a8e923b021"
+    },
+    {
+      "Key": "TestClearPressure",
+      "Kind": "TestClearPressure",
+      "Name": "模块清零测试",
+      "Description": "S1/S2 模块清零",
+      "StepType": "Auto",
+      "TimeoutMs": 15000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0021-478e-8842-d5a8e923b022"
+    },
+    {
+      "Key": "TestEnergy",
+      "Kind": "TestEnergy",
+      "Name": "蓄能器充压检测",
+      "Description": "蓄能器快充满并判定压力下限",
+      "StepType": "Auto",
+      "TimeoutMs": 120000,
+      "Parameters": [],
+      "Conditions": [
+        { "Kind": "Range", "Name": "蓄能器压力下限", "Min": 8000, "Max": 20000, "Unit": "kPa" }
+      ],
+      "Guid": "a1b2c3d4-0022-478e-8842-d5a8e923b023"
+    },
+    {
+      "Key": "TestCalibrationSensor",
+      "Kind": "TestCalibrationSensor",
+      "Name": "液源模块自校准",
+      "Description": "液源校准启动/停止",
+      "StepType": "Auto",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0023-478e-8842-d5a8e923b024"
+    },
+    {
+      "Key": "BumpTest",
+      "Kind": "BumpTest",
+      "Name": "液体泵效率测试",
+      "Description": "泵效率百分比判定",
+      "StepType": "Auto",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [
+        { "Kind": "Range", "Name": "泵效率下限", "Min": 80, "Max": 100, "Unit": "%" }
+      ],
+      "Guid": "a1b2c3d4-0024-478e-8842-d5a8e923b025"
+    },
+    {
+      "Key": "ETest",
+      "Kind": "ETest",
+      "Name": "液体泵电机调速",
+      "Description": "30%/60%/90% 三档转速判定",
+      "StepType": "Auto",
+      "TimeoutMs": 60000,
+      "Parameters": [],
+      "Conditions": [
+        { "Kind": "Range", "Name": "电机转速下限", "Min": 500, "Max": 5000, "Unit": "rpm" }
+      ],
+      "Guid": "a1b2c3d4-0025-478e-8842-d5a8e923b026"
+    },
+    {
+      "Key": "TestRepairVent",
+      "Kind": "TestRepairVent",
+      "Name": "系统泄压",
+      "Description": "关闭维修泄压阀，压力归零",
+      "StepType": "Auto",
+      "TimeoutMs": 30000,
+      "Parameters": [],
+      "Conditions": [
+        { "Kind": "Range", "Name": "泄压后压力上限", "Min": 0, "Max": 10, "Unit": "kPa" }
+      ],
+      "Guid": "a1b2c3d4-0026-478e-8842-d5a8e923b027"
+    },
+    {
+      "Key": "FrontDoorTest",
+      "Kind": "FrontDoorTest",
+      "Name": "舱门泄压测试",
+      "Description": "舱门状态检查",
+      "StepType": "Auto",
+      "TimeoutMs": 10000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0027-478e-8842-d5a8e923b028"
+    },
+    {
+      "Key": "PowerTest",
+      "Kind": "PowerTest",
+      "Name": "电源开关测试",
+      "Description": "电源开关状态检查",
+      "StepType": "Auto",
+      "TimeoutMs": 10000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0028-478e-8842-d5a8e923b029"
+    }
+  ]
+}

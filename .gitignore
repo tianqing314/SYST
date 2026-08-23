@@ -341,3 +341,6 @@ remove_placeholders.py
 replace_pct.ps1
 TODO_清洗手册.md
 _ReferencesAdapterReport.md
+
+# 清单备份文件
+*.bak

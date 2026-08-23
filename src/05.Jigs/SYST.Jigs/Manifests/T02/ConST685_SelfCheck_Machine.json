@@ -1,0 +1,380 @@
+{
+  "Key": "ConST685_SelfCheck_Machine",
+  "DeviceFamily": "T02",
+  "BoardName": "ConST685",
+  "Description": "ConST685 过程校验仪整机自检测试（匹配旧平台 T02_SelfCheck.json 完整业务）",
+  "Dut": {
+    "Name": "ConST685",
+    "Model": "ConST685",
+    "ProductModel": "ConST685"
+  },
+  "Positions": [
+    {
+      "Index": 1,
+      "Name": "1号位"
+    }
+  ],
+  "Steps": [
+    {
+      "Key": "PowerOnOffTest",
+      "Kind": "PowerOnOffTest",
+      "Name": "外观检验",
+      "Description": "全面检查无漏装、错装、固定、贴标情况，通电后整机无异响异味等显著异常",
+      "StepType": "Manual",
+      "TimeoutMs": 120000,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "ec910515-0856-417a-a978-aab058d945ae"
+    },
+    {
+      "Key": "LCDBadPixelTest",
+      "Kind": "LCDBadPixelTest",
+      "Name": "LCD液晶屏",
+      "Description": "显示边缘为白边框的红绿蓝白黑颜色，最后一个确定按钮",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "61f5529c-0b1a-4b6c-af2e-2fafedf67ecb"
+    },
+    {
+      "Key": "LCDTouchTest",
+      "Kind": "LCDTouchTest",
+      "Name": "触摸屏",
+      "Description": "手指画线，线段跟随手指且不断为正常，按确认键确认",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "689f2480-db80-4d57-bfe5-3eabb66b8b22"
+    },
+    {
+      "Key": "TestSpeaker",
+      "Kind": "TestSpeaker",
+      "Name": "扬声器",
+      "Description": "点击屏幕音量键扬声器响一声",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "0a5d6fd6-8cb2-4d93-9f47-4ee54f3ff830"
+    },
+    {
+      "Key": "TestWifi",
+      "Kind": "TestWifi",
+      "Name": "WIFI测试",
+      "Description": "连接指定无线网络并通讯测试",
+      "StepType": "Auto",
+      "TimeoutMs": 30000,
+      "Parameters": [
+        {
+          "Name": "SSID",
+          "Value": "iConnect",
+          "Unit": null
+        },
+        {
+          "Name": "EncryptionMode",
+          "Value": "WPA_PSK_AES",
+          "Unit": null
+        },
+        {
+          "Name": "Password",
+          "Value": "11111111",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "8d03209a-8520-4eb4-90f3-c4512eb9a721"
+    },
+    {
+      "Key": "TestWriteSN",
+      "Kind": "TestWriteSN",
+      "Name": "SN写入",
+      "Description": "写入整机 SN 号并核对",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入SN",
+          "Value": "",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "6e512707-9599-4a8c-9eb6-d91283e441b7"
+    },
+    {
+      "Key": "TestWriteDevType",
+      "Kind": "TestWriteDevType",
+      "Name": "设备类型写入",
+      "Description": "写入整机设备类型并核对",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入型号",
+          "Value": "ConST685",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "54776c86-48f9-4547-9daa-29eeb393bd7c"
+    },
+    {
+      "Key": "TestSoftVersions",
+      "Kind": "TestSoftVersions",
+      "Name": "版本验证",
+      "Description": "验证整机主程序、系统版本和测量板版本是否最新",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "温湿度计SN",
+          "Value": "25223D010016",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "447258b1-1b35-4269-adc6-c4c54796b1c0"
+    },
+    {
+      "Key": "TestDeviceChanelZero",
+      "Kind": "TestDeviceChanelZero",
+      "Name": "REF1、REF2零点测试",
+      "Description": "短路 REF1/REF2 零点值在阈值之内",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "电阻零点差值",
+          "Min": 0,
+          "Max": 0.1,
+          "Unit": "Ω"
+        },
+        {
+          "Kind": "Range",
+          "Name": "电阻REF1REF2差值",
+          "Min": 0,
+          "Max": 0.0002,
+          "Unit": "Ω"
+        },
+        {
+          "Kind": "Range",
+          "Name": "电压零点差值",
+          "Min": 0,
+          "Max": 0.005,
+          "Unit": "mV"
+        },
+        {
+          "Kind": "Range",
+          "Name": "电压REF1REF2差值",
+          "Min": 0,
+          "Max": 0.002,
+          "Unit": "mV"
+        }
+      ],
+      "Guid": "e5365652-26c4-4429-8913-153d1dc1f300"
+    },
+    {
+      "Key": "TestConnectorsInternal",
+      "Kind": "TestConnectorsInternal",
+      "Name": "内嵌接线盒连接口测试",
+      "Description": "正确插放接线盒读取基本信息正常",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "4cdc667c-08b2-479d-b5ce-0d55c0d3b12d"
+    },
+    {
+      "Key": "TestConnectorsExternal",
+      "Kind": "TestConnectorsExternal",
+      "Name": "外接接线盒连接口测试",
+      "Description": "后置 Cascade Out 级联口外接接线盒读取基本信息正常",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "3385d414-61d8-408f-aa81-7c8ee2ca2a66"
+    },
+    {
+      "Key": "TestSetStartLogo",
+      "Kind": "TestSetStartLogo",
+      "Name": "更换启动LOGO测试",
+      "Description": "正常更换启动 LOGO 需重启查看",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "4f8908e5-fb70-4811-8bc1-d0b6c2fdb4a0"
+    },
+    {
+      "Key": "TestCloseExternalResistance",
+      "Kind": "TestCloseExternalResistance",
+      "Name": "关闭外部电阻",
+      "Description": "设置设备 REF1 工业热电阻 R100/R400/R4k 测量最后设置电流测量",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "8f382621-5057-4063-9356-5b9942408761"
+    },
+    {
+      "Key": "SystemVoltageTest",
+      "Kind": "SystemVoltageTest",
+      "Name": "系统电压",
+      "Description": "ADC 驱动读取系统电压（25~31V 为正常）",
+      "Settings": {
+        "Point": "SystemVoltage"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "范围",
+          "Min": 25.0,
+          "Max": 31.0,
+          "Unit": "V"
+        }
+      ],
+      "Guid": "b2c3d4e5-0001-478e-8842-d5a8e923bcb2"
+    },
+    {
+      "Key": "TestSystem5Voltage",
+      "Kind": "SystemVoltageTest",
+      "Name": "5V电压测试",
+      "Description": "ADC 驱动读取 5V 电压（4.5~5.5V 为正常）",
+      "Settings": {
+        "Point": "System5V"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "范围",
+          "Min": 4.5,
+          "Max": 5.5,
+          "Unit": "V"
+        }
+      ],
+      "Guid": "b2c3d4e5-0002-478e-8842-d5a8e923bcb2_5V"
+    },
+    {
+      "Key": "TestSystem12Voltage",
+      "Kind": "SystemVoltageTest",
+      "Name": "12V背光电压测试",
+      "Description": "ADC 驱动读取 12V 背光电压（11~13V 为正常）",
+      "Settings": {
+        "Point": "System12V"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "范围",
+          "Min": 11.0,
+          "Max": 13.0,
+          "Unit": "V"
+        }
+      ],
+      "Guid": "b2c3d4e5-0003-478e-8842-d5a8e923bcb2_12V"
+    },
+    {
+      "Key": "TestSystem3_3Voltage",
+      "Kind": "SystemVoltageTest",
+      "Name": "3.3V电压测试",
+      "Description": "ADC 驱动读取 3.3V 电压（3.0~3.6V 为正常）",
+      "Settings": {
+        "Point": "System3_3V"
+      },
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [
+        {
+          "Kind": "Range",
+          "Name": "范围",
+          "Min": 3.0,
+          "Max": 3.6,
+          "Unit": "V"
+        }
+      ],
+      "Guid": "b2c3d4e5-0004-478e-8842-d5a8e923bcb2_3V3"
+    },
+    {
+      "Key": "TestUSBPrincipal",
+      "Kind": "TestUSBPrincipal",
+      "Name": "USB主口",
+      "Description": "往 U 盘写一测试文件，读文件比较内容",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入数据",
+          "Value": "testData010101-usb",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "67e30a4f-1a2f-414e-a147-a1227a660a39"
+    },
+    {
+      "Key": "TestUSBSubordinate",
+      "Kind": "TestUSBSubordinate",
+      "Name": "USB从口",
+      "Description": "指令测试 USB 从通讯是否正常",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0005-4a54-9815-6f9ed9158505"
+    },
+    {
+      "Key": "TestStorageCardPrincipal",
+      "Kind": "TestStorageCardPrincipal",
+      "Name": "SD卡测试",
+      "Description": "往 SD 卡写一测试文件读回比对",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [
+        {
+          "Name": "写入数据",
+          "Value": "testData010101-sd",
+          "Unit": null
+        }
+      ],
+      "Conditions": [],
+      "Guid": "a1b2c3d4-0006-4a54-9815-6f9ed9158506"
+    },
+    {
+      "Key": "TestClock",
+      "Kind": "TestClock",
+      "Name": "实时时钟测试",
+      "Description": "读写时钟并提示结果",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "b2c3d4e5-0002-478e-8842-d5a8e923bcb2"
+    },
+    {
+      "Key": "TestBluetooth",
+      "Kind": "TestBluetooth",
+      "Name": "蓝牙测试",
+      "Description": "读取蓝牙模块状态或固件版本或 MAC 码",
+      "StepType": "Auto",
+      "TimeoutMs": 0,
+      "Parameters": [],
+      "Conditions": [],
+      "Guid": "b2c3d4e5-0003-478e-8842-d5a8e923bcb2"
+    }
+  ]
+}
