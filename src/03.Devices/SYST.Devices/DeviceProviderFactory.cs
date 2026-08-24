@@ -91,10 +91,17 @@ public sealed class DeviceProviderFactory : IDeviceProviderFactory
 
         // 标准模块（共享设备）：独立配置优先（测试项维护 .shared.json，存在即完全取代），否则 manifest 默认（References 转换）
         var toolSource = _sharedStore.Load(manifest.DeviceFamily, manifest.Key) ?? manifest.ToolDevices;
+        // UI 连接配置覆盖：connections.json 的 StandardModules 按 Key 覆盖工装端点
+        var toolOverrides = BuildToolOverrideMap(_connections);
         var tools = new Dictionary<string, IStandardModule>(StringComparer.OrdinalIgnoreCase);
         foreach (var tool in toolSource)
         {
             var toolComm = tool.Comm;
+            // UI 连接配置优先级最高：覆盖 manifest/.shared.json 中的硬编码端点
+            if (toolOverrides.TryGetValue(tool.Key, out var overrideEp))
+            {
+                toolComm = overrideEp;
+            }
             // 期望序列号 = 清单 SerialNumber（用户配置）；连接时读设备 SN 比对（见 DPSEXStandardModule.ConnectAsync）
             var expectedSn = tool.SerialNumber;
             if (toolComm is not null && toolComm.Link == LinkType.Serial)
@@ -109,6 +116,19 @@ public sealed class DeviceProviderFactory : IDeviceProviderFactory
             tools[tool.Key] = _stdRegistry.Create(descriptor);
         }
         return new DeviceProvider(_registry.Create(dut), tools);
+    }
+
+    /// <summary>
+    /// 从连接配置中提取工装设备端点覆盖表（StandardModules → Key → CommEndpoint）。
+    /// </summary>
+    private static Dictionary<string, CommEndpoint> BuildToolOverrideMap(ConnectionSettings conn)
+    {
+        var map = new Dictionary<string, CommEndpoint>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, ep) in conn.StandardModules)
+        {
+            map[name] = ep;
+        }
+        return map;
     }
 
     /// <summary>

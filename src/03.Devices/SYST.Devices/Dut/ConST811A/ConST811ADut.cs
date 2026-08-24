@@ -1,10 +1,10 @@
-using System.Globalization;
-using System.IO.Ports;
-using System.Net;
 using Microsoft.Extensions.Logging;
 using SYST.Core.Abstractions;
 using SYST.Devices.Abstractions;
 using SYST.Devices.Comm;
+using System.Globalization;
+using System.IO.Ports;
+using System.Net;
 using Xmas11.Comm.Data.Common;
 using Xmas11.Comm.Devices;
 using Xmas11.Comm.Devices.APC2.Data;
@@ -331,9 +331,42 @@ public sealed class ConST811ADut : IConST811ADut
                 "GetStaticETHemetIPAddress" => StrResult(() => Dev.GetStaticETHemetIPAddress(), "GetStaticETHemetIPAddress"),
                 "GetPressureModelOnlineState" => StrResult(() => Dev.GetPressureModelOnlineState(), "GetPressureModelOnlineState"),
                 "GetStorageCardState" => StrResult(() => Dev.StorageCardState(), "GetStorageCardState"),
-                "GetControllerBroadPowerCheckState" => StrResult(() => Dev.GetControllerException(), "GetControllerBroadPowerCheckState"),
+                "GetControllerBroadPowerCheckState" => ControllerBroadPowerCheckText(),
                 "GetPowerSupplyCheck" => StrResult(() => Dev.GetPowerSupplyCheck(), "GetPowerSupplyCheck"),
                 "GetMotor_Temperature" => StrResult(() => Dev.GetPumpTemperature(), "GetMotor_Temperature"),
+                "GetDevType" => ResultText(Dev.GetDevType(), "GetDevType").Replace(",", ""),
+                "GetCurrentElectricMeasure" => ElectricMeasureText(),
+                "GetElectricalBroadPowerCheckState" => ElectricalPowerCheckText(),
+                "GetPAMassage" => PAMassageList(),
+                "ConnectPA" => ConnectPAByAddress(a),
+                // USB 文本命令
+                "GetUSBdriveState" => USBdriveStateText(),
+                "GetUSBdriveSize" => USBdriveSizeText(),
+                "ReadDataFromUSB" => ReadDataFromUSBText(a),
+                // WiFi 文本命令
+                "GetCommType" => GetCommType(),
+                "GetWLANFunctionState" => GetWLANFunctionState(),
+                "GetWIFIState" => ResultText(Dev.GetWifiState(), "GetWIFIState"),
+                "GetWIFIMacAddress" => ResultText(Dev.GetWiFiAddress(), "GetWIFIMacAddress"),
+                "GetConnectWifiState" => ResultText(Dev.GetConnectWifiState(), "GetConnectWifiState"),
+                "GetWifiIPAddress" => ResultText(Dev.GetWifiIPAddress(), "GetWifiIPAddress"),
+                // 自整定状态
+                "GetSelfTuningState" => SelfTuningStateText(),
+                // 进气传感器校准状态
+                "GetCalibrationSensorState" => CalibrationSensorStateText(),
+                // 压力量程上下限（从 PressureRange 中提取单个值）
+                "GetPressureControlRange_UpperLimit" => PressureRangeValueText("Upper"),
+                "GetPressureControlRange_LowerLimit" => PressureRangeValueText("Lower"),
+                // 压力量程范围（Lower~Upper，供泄露/排空测试报告量程）
+                "GetSetPointLimitPressureRange" => PressureRangeText(),
+                // 压力值（从 Pressure record 中提取 Value）
+                "GetPressure_IPM" => PressureValueText(() => _dev!.GetPressure_IPM()),
+                "GetPressureLowerer_IPM" => PressureValueText(() => _dev!.GetPressureLowerer_IPM()),
+                "GetSupplyPressure" => PressureValueText(() => _dev!.GetSupplyPressure()),
+                "GetVacuumPressure" => PressureValueText(() => _dev!.GetVacuumPressure()),
+                "GetAtmosphericPressure" => PressureValueText(() => _dev!.GetAtmos()),
+                // 内部模块温度（高压,低压；InterPressureModuleInfo 转换）
+                "GetDev_T" => InterModuleTempText(),
                 _ => ResultText(Execute(method, a), method),
             };
         }, ct);
@@ -393,14 +426,23 @@ public sealed class ConST811ADut : IConST811ADut
         }, ct);
     }
 
-    /// <summary>打开连接并返回结果。</summary>
+    /// <summary>打开连接并返回结果。设备不存在时返回 false 而非抛异常。</summary>
     private bool OpenAndReport()
     {
         try { _dev?.Close(); } catch { }
-        _dev = Build(_comm);
-        IsConnected = _dev.Open();
-        _logger.LogInformation(IsConnected ? "ConST811A 打开连接成功" : "ConST811A 打开连接失败");
-        return IsConnected;
+        try
+        {
+            _dev = Build(_comm);
+            IsConnected = _dev.Open();
+            _logger.LogInformation(IsConnected ? "ConST811A 打开连接成功" : "ConST811A 打开连接失败");
+            return IsConnected;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "ConST811A 打开连接异常（设备可能正在重启）");
+            IsConnected = false;
+            return false;
+        }
     }
 
     /// <summary>关闭连接并返回成功。</summary>
@@ -454,6 +496,152 @@ public sealed class ConST811ADut : IConST811ADut
         if (!r.IsCorrect)
             throw new DeviceCommException($"ConST811A {what} 失败", TestResultStatus.CommunicationError);
         return r.Result?.ToString() ?? string.Empty;
+    }
+
+    /// <summary>从 PressureRange 提取上限或下限的数值文本。which: "Upper" 或 "Lower"。</summary>
+    private string PressureRangeValueText(string which)
+    {
+        var r = _dev!.GetSetPointEditPressureRange();
+        if (!r.IsCorrect)
+            throw new DeviceCommException($"ConST811A GetPressureControlRange_{which}Limit 失败", TestResultStatus.CommunicationError);
+        dynamic range = ((dynamic)r).Result;
+        double value = which == "Upper" ? (double)range.UpperValue : (double)range.LowerValue;
+        return value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>从 PressureRange 提取量程范围文本 "Lower~Upper"（kPa）。</summary>
+    private string PressureRangeText()
+    {
+        var r = _dev!.GetSetPointEditPressureRange();
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A 获取压力控制量程范围失败", TestResultStatus.CommunicationError);
+        dynamic range = ((dynamic)r).Result;
+        double lower = (double)range.LowerValue;
+        double upper = (double)range.UpperValue;
+        return $"{lower.ToString(CultureInfo.InvariantCulture)}~{upper.ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    /// <summary>
+    /// 从 <c>InterPressureModuleInfo</c> 提取内部模块温度文本 "高压温度,低压温度"。
+    /// 与旧脚本 <c>GetDev_T</c> 语义对齐（tvalue 记录"压力值,高压温度,低压温度,泵温度,电测板温度"）。
+    /// </summary>
+    private string InterModuleTempText()
+    {
+        var r = _dev!.GetInterPressureModuleInfo();
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A 读取内部模块温度失败", TestResultStatus.CommunicationError);
+        var info = r.Result;
+        if (info is null) return string.Empty;
+        return $"{info.HighModuleTemperature.ToString(CultureInfo.InvariantCulture)},{info.LowModuleTemperature.ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    /// <summary>从 iResponse&lt;Pressure&gt; 中提取 Value 并转为文本。</summary>
+    private string PressureValueText(Func<iResponse> call)
+    {
+        var r = call();
+        if (!r.IsCorrect)
+            throw new DeviceCommException($"ConST811A 压力读取失败", TestResultStatus.CommunicationError);
+        double value = ((dynamic)r).Result.Value;
+        return value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>获取电测板电源状态。旧代码逻辑：响应 "00-00-00-00" 或 "00-04-00-00" 视为 OK。</summary>
+    private string ElectricalPowerCheckText()
+    {
+        var r = Dev.GetElectricalException();
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A GetElectricalException 失败", TestResultStatus.CommunicationError);
+        var result = r.Result?.ToString() ?? string.Empty;
+        // 与旧代码一致：特定返回值视为 OK
+        return (result == "00-00-00-00" || result == "00-04-00-00") ? "OK" : result;
+    }
+
+    /// <summary>获取控制板电源状态。响应 "00-00-00-00-00-00" 视为 OK。</summary>
+    private string ControllerBroadPowerCheckText()
+    {
+        var r = Dev.GetControllerException();
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A GetControllerException 失败", TestResultStatus.CommunicationError);
+        var result = r.Result?.ToString() ?? string.Empty;
+        // 特定返回值视为 OK
+        return result.StartsWith("00-00-") ? "OK" : result;
+    }
+
+    /// <summary>获取当前电测量值（纯数值字符串，供 double.TryParse 使用）。</summary>
+    private string ElectricMeasureText()
+    {
+        var r = Dev.GetCurrentElectricMeasure();
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A GetCurrentElectricMeasure 失败", TestResultStatus.CommunicationError);
+        var m = r.Result;
+        if (m is null) return string.Empty;
+        return m.MeasureValue.ToString("f4");
+    }
+
+    /// <summary>获取自整定状态，返回 ResultType 枚举名。PORT: 旧 ConST811A.GetSelfTuningState。</summary>
+    private string SelfTuningStateText()
+    {
+        var r = Dev.GetSelfTuningState();
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A GetSelfTuningState 失败", TestResultStatus.CommunicationError);
+        // SelfTuningData 有 ResultType (SelfTuningTestType enum) 和 ProcessValue
+        dynamic data = r.Result;
+        if (data is null) return "Unknown";
+        string resultType = data.ResultType?.ToString() ?? "Unknown";
+        // 如果是 InProgress，附加进度百分比
+        if (resultType == "InProgress")
+        {
+            int progress = (int)(data.ProcessValue ?? 0);
+            return $"InProgress:{progress}";
+        }
+        return resultType;
+    }
+
+    /// <summary>获取进气传感器校准状态，返回 CalibrationSensorStateTest 枚举名。PORT: 旧 ConST811A.GetCalibrationSensorState。</summary>
+    private string CalibrationSensorStateText()
+    {
+        var r = Dev.GetCalibrationSensorState();
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A GetCalibrationSensorState 失败", TestResultStatus.CommunicationError);
+        dynamic data = r.Result;
+        if (data is null) return "UnKnown";
+        string resultType = data.ResultType?.ToString() ?? "UnKnown";
+        // 如果是 Process，附加进度百分比
+        if (resultType == "Process")
+        {
+            int progress = (int)(data.ProcessValue ?? 0);
+            return $"Process:{progress}";
+        }
+        return resultType;
+    }
+
+    /// <summary>获取 PA 变送器列表，转为分号分隔字符串（每个元素取 Address）。</summary>
+    private string PAMassageList()
+    {
+        var r = Dev.GetPAMassage();
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A GetPAMassage 失败", TestResultStatus.CommunicationError);
+        var list = r.Result;
+        if (list is null || list.Count == 0)
+            return string.Empty;
+        return string.Join(";", list.Select(m => m.Address));
+    }
+
+    /// <summary>按地址连接 PA 变送器：从设备获取列表，匹配地址后连接。</summary>
+    private string ConnectPAByAddress(string[]? a)
+    {
+        var target = a?.FirstOrDefault() ?? string.Empty;
+        var listR = Dev.GetPAMassage();
+        if (!listR.IsCorrect)
+            throw new DeviceCommException("ConST811A GetPAMassage 失败", TestResultStatus.CommunicationError);
+        var list = listR.Result;
+        if (list is null || list.Count == 0)
+            return "false";
+        // 匹配：地址字符串匹配 PAMassage.Address
+        var match = list.FirstOrDefault(m => m.Address.Contains(target, StringComparison.OrdinalIgnoreCase));
+        var addr = match?.Address ?? list[0].Address;
+        var r = Dev.ConnectPA(addr);
+        return r.IsCorrect ? "true" : "false";
     }
 
     /// <summary>
@@ -557,6 +745,11 @@ public sealed class ConST811ADut : IConST811ADut
 
             // ===== 存储 (Storage) =====
             "GetStorageCardState" => dev.StorageCardState(),
+            "AddDataToSD" => dev.DataAddtoStorageCard(a![0], Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(a![1])), FileWriteType.TRUNcate),
+            "ReadDataFromSD" => dev.DataReadtoStorageCard(a![0]),
+            "DelSDCardfile" => dev.Delfile($@"\Storage_Card\{a![0]}"),
+            "QuerySDCardfileExists" => dev.QueryfileExists($@"\Storage_Card\{a![0]}"),
+            "DiskSize_SD" => dev.DiskSize("Storage_Card"),
 
             // ===== HART/PA 变送器 =====
             "SetBrightness" => dev.SetBrightness(Parse<BrightnessType>(Arg(a, 0)), Arg(a, 1)),
@@ -576,6 +769,76 @@ public sealed class ConST811ADut : IConST811ADut
             "GetPressureModelOnlineState" => dev.GetPressureModelOnlineState(),
             "GetAtmosSensor" => dev.GetAtmos(),
             "GetAtmos" => dev.GetAtmos(),
+            "GetDevType" => dev.GetPrimaryDevType(),
+
+            // ===== 大气压传感器 (Atmospheric Sensor) =====
+            "GetAtmosphericPressure" => dev.GetAtmos(),
+
+            // ===== 气泵 (Gas Pump) =====
+            "GetGasPumpState" => dev.GetPumpTestState(),
+            "SetGasPumpStart" => dev.TestPump(PumpTestItem.Positive),
+            "SetGasPumpStop" => dev.TestPump(PumpTestItem.Stop),
+
+            // ===== NTC 温度 =====
+            "GetNTCTemperature" => dev.GetPumpTemperature(),
+
+            // ===== 压力控制 (Pressure Control Extended) =====
+            "SetPressureControl" => dev.SetPressureControlMode(DevicePressureControlMode.MEASURE),
+            "GetPressureControlState" => dev.GetPressureModelStableState(1),
+
+            // ===== 气密性测试 (QR Leak Test) =====
+            "SetQRLeakTestStart" => dev.SetPressureControlMode(DevicePressureControlMode.MEASURE),
+            "GetQRLeakTestState" => dev.GetPressureModelStableState(1),
+
+            // ===== 传感器校准 (Calibration Sensor Extended) =====
+            "SetCalibrationSensorAuto" => dev.SetCalibrationAutoDate(DateTime.Now),
+            "GetCalibrationSensorResult" => dev.GetCalibrationSensorState(),
+
+            // ===== 控压系数 (Control Panel Model Parameter) =====
+            "SetControlPanelModelParameter" => dev.SetPressureModelStableParam(1, ToDouble(Arg(a, 0)), 5),
+            "GetControlPanelModelParameter" => dev.GetPressureModelStableState(1),
+
+            // ===== 泵阻转电流 (Dump Current) =====
+            "SetDumpStallingCurrent" => dev.SetPressureControlMode(DevicePressureControlMode.MEASURE),
+            "GetDumpCurrent" => dev.GetPumpCurrent(),
+            "SetDumpCurrent" => dev.SetPressureControlMode(DevicePressureControlMode.MEASURE),
+
+            // ===== 序列号/版本 (Serial Number / Version) =====
+            "GetSerialNumber" => dev.GetSerialNumber(),
+            "GetVersion" => dev.GetVersion(),
+            "GetVersion_Electricity" => dev.GetVersion(),
+            "GetVersion_OS" => dev.GetVersion_OS(),
+            "GetFixVersion" => dev.GetVersion(),
+            "ReadHardWaveVersion" => dev.GetVersion(),
+            "GetHardCorValue" => dev.GetVersion(),
+            "GetBatteryVoltage" => dev.GetBatteryValue(),
+
+            // ===== USB =====
+            "GetUSBCommState" => dev.GetBlueToothState(),
+            "GetUSBStorageState" => dev.StorageCardState(),
+            "GetUSBdriveState" => dev.USBdriveState(),
+            "GetUSBdriveSize" => dev.DiskSize("Hard Disk"),
+            "AddDataToUSB" => dev.AddDatatoUSB(a![0], Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes(a![1])), FileWriteType.TRUNcate),
+            "ReadDataFromUSB" => dev.ReadDatatoUSB(a![0]),
+            "DelUSBfile" => dev.Delfile($@"\Hard Disk\{a![0]}"),
+            "QueryUSBfileExists" => dev.QueryfileExists($@"\Hard Disk\{a![0]}"),
+
+            // ===== WiFi =====
+            "GetWIFIState" => dev.GetWifiState(),
+            "GetWIFIMacAddress" => dev.GetWiFiAddress(),
+            "OpenWIFI" => dev.SetWifiState(OpenCloseState.Open),
+            "CloseWIFI" => dev.SetWifiState(OpenCloseState.Close),
+            "ConnectWifiToHotspot" => dev.ConnectWifiToHotspot(a![0], a![1], a![2]),
+            "GetConnectWifiState" => dev.GetConnectWifiState(),
+            "GetWifiIPAddress" => dev.GetWifiIPAddress(),
+            "OpenWLANFunction" => dev.SetFunctionState(FunctionType.WLAN, OpenCloseState.Open),
+            "CloseWLANFunction" => dev.SetFunctionState(FunctionType.WLAN, OpenCloseState.Close),
+
+            // ===== 电源适配器 (Power Adapter) =====
+            "GetPowerAdapterState" => dev.GetPowerSupplyCheck(),
+
+            // ===== 设备DDT =====
+            "GetDeviceDDT" => dev.GetVersion(),
 
             _ => throw new DeviceCommException($"ConST811A 不支持指令 {method}", TestResultStatus.CommunicationError),
         };
@@ -590,6 +853,66 @@ public sealed class ConST811ADut : IConST811ADut
             "Low" or "低" => dev.SetControlPressureModel_Q(PressureModel.InterLowPressure),
             _ => throw new DeviceCommException($"ConST811A SetControlPressureModel 参数无效：{mode}", TestResultStatus.CommunicationError),
         };
+    }
+
+    /// <summary>获取当前通讯类型（ETH/WLAN/USB）。PORT: 旧 ConST811A.GetCommType。</summary>
+    /// <remarks>旧代码通过检查 CommInstance 类型来判断。简化版：检查 WiFi 连接状态。</remarks>
+    private string GetCommType()
+    {
+        try
+        {
+            var wifiState = Dev.GetConnectWifiState();
+            if (wifiState.IsCorrect && wifiState.Result.ToString() == "Open")
+                return "WLAN";
+            return "None";
+        }
+        catch
+        {
+            return "None";
+        }
+    }
+
+    /// <summary>获取 WLAN 功能开关状态（Open/Close）。PORT: 旧 ConST811A.GetWLANFunctionState。</summary>
+    private string GetWLANFunctionState()
+    {
+        var r = Dev.GetFunctionState(FunctionType.WLAN);
+        if (!r.IsCorrect || r.Result is not List<bool> states || states.Count < 1)
+            throw new DeviceCommException("ConST811A GetWLANFunctionState 失败", TestResultStatus.CommunicationError);
+        return states[0] ? "Open" : "Close";
+    }
+
+    // ===== USB 辅助方法 =====
+
+    /// <summary>获取 USB 驱动器状态。PORT: 旧 ConST811A.GetUSBdriveState。</summary>
+    private string USBdriveStateText()
+    {
+        var r = Dev.USBdriveState();
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A USBdriveState 失败", TestResultStatus.CommunicationError);
+        return r.Result.ToString() ?? string.Empty;
+    }
+
+    /// <summary>获取 USB 驱动器大小。PORT: 旧 ConST811A.GetUSBdriveSize。</summary>
+    private string USBdriveSizeText()
+    {
+        var r = Dev.DiskSize("Hard Disk");
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A USBdriveSize 失败", TestResultStatus.CommunicationError);
+        var arr = r.Result as long[];
+        if (arr != null && arr.Length >= 2)
+            return $"识别成功,总字节{arr[1]}";
+        return r.Result.ToString() ?? string.Empty;
+    }
+
+    /// <summary>从 USB 读取文件内容。PORT: 旧 ConST811A.ReadDataFromUSB。</summary>
+    private string ReadDataFromUSBText(string[]? a)
+    {
+        if (a == null || a.Length < 1)
+            throw new DeviceCommException("ConST811A ReadDataFromUSB 缺少文件名参数", TestResultStatus.CommunicationError);
+        var r = Dev.ReadDatatoUSB(a[0]);
+        if (!r.IsCorrect)
+            throw new DeviceCommException("ConST811A ReadDataFromUSB 失败", TestResultStatus.CommunicationError);
+        return r.Result.ToString() ?? string.Empty;
     }
 
     // ===== GetRS1 / GetRS2：测试前量程与版本预检消息 =====

@@ -59,7 +59,11 @@ internal sealed class ConST811ATestToolDriver : IMachineTestTool
             {
                 if (string.IsNullOrEmpty(comm.Ip) || comm.Port == null)
                 {
-                    throw new InvalidOperationException("网络端点缺少 IP 或端口");
+                    throw new InvalidOperationException(
+                        $"工装设备 [{Key}] 网络端点配置不完整。" +
+                        $"IP: {(string.IsNullOrEmpty(comm.Ip) ? "未设置" : comm.Ip)}, " +
+                        $"Port: {(comm.Port == null ? "未设置" : comm.Port.ToString())}。" +
+                        $"请在清单文件的 ToolDevices 中添加 Ip 地址配置。");
                 }
                 // 直接使用 IP 和端口创建 ConSTGZ811A 实例
                 var ipAddress = System.Net.IPAddress.Parse(comm.Ip);

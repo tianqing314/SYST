@@ -83,6 +83,13 @@ public interface ITestContext
     void Report(string message, RealtimeLevel level = RealtimeLevel.Info);
 
     /// <summary>
+    /// 更新最后一条实时消息（用于倒计时等场景，原地更新而非追加新行）。
+    /// </summary>
+    /// <param name="message">新消息内容。</param>
+    /// <param name="level">消息级别。</param>
+    void UpdateLastReport(string message, RealtimeLevel level = RealtimeLevel.Info);
+
+    /// <summary>
     /// 记录该测试项的实时采集数据序列（一次性，多通道，曲线图用，最终序列化落 test_process_data）。
     /// </summary>
     /// <param name="series">采集数据序列。</param>

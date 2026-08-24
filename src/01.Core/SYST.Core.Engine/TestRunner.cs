@@ -112,6 +112,11 @@ public sealed class RealtimeMessageEventArgs : EventArgs
     public RealtimeLevel Level { get; init; }
 
     /// <summary>
+    /// 是否更新前一条消息（用于倒计时等场景，原地更新而非追加）。
+    /// </summary>
+    public bool IsUpdate { get; init; }
+
+    /// <summary>
     /// 消息时刻。
     /// </summary>
     public DateTime At { get; init; } = DateTime.Now;
@@ -413,6 +418,10 @@ public sealed class TestRunner
         {
             Message?.Invoke(this, new RealtimeMessageEventArgs { PositionIndex = pos.Index, StepKey = stepKey, Message = msg, Level = lvl });
         }
+        void UpdateReport(string? stepKey, string msg, RealtimeLevel lvl)
+        {
+            Message?.Invoke(this, new RealtimeMessageEventArgs { PositionIndex = pos.Index, StepKey = stepKey, Message = msg, Level = lvl, IsUpdate = true });
+        }
 
         var steps = manifest.Steps.Where(s => options.IsStepSelected(s.Key)).OrderBy(s => s.Order).ToList();
         Report(null, $"=== [{pos.Name}] 开始，共 {steps.Count} 项 ===", RealtimeLevel.Info);
@@ -436,6 +445,10 @@ public sealed class TestRunner
                 processInfos.Add($"{DateTime.Now:HH:mm:ss.fff} {m}");
                 Report(step.Key, m, lvl);
             }
+            void StepUpdateReport(string m, RealtimeLevel lvl)
+            {
+                UpdateReport(step.Key, m, lvl);
+            }
 
             // 测试项级重试（PORT: 旧 WatchAndProcessIntergrade 的 SetRetryCount(pos, 3)）。
             // 不通过就整项重来，最多 options.StepAttempts 次；通讯异常也先重试，重试用尽才判致命并终止本工位。
@@ -448,7 +461,7 @@ public sealed class TestRunner
             //      确认只发生一次，不参与自动重试；确认 NG/超时按不合格收尾 ----
             if (step.StepType.Equals("Manual", StringComparison.OrdinalIgnoreCase))
             {
-                ctx = new TestContext(provider, pos, step, _evaluator, _logger, StepReport,
+                ctx = new TestContext(provider, pos, step, _evaluator, _logger, StepReport, StepUpdateReport,
                     s => SampleReported?.Invoke(this, s),
                     (msg, img, okText, cancelText, ct2) => RequestConfirmAsync(pos.Index, step, msg, img, okText, cancelText, ct2))
                 { SerialNumber = serialNo };
@@ -465,7 +478,7 @@ public sealed class TestRunner
                     StepReport($"—— 本项第 {attempt}/{maxAttempts} 次尝试 ——", RealtimeLevel.Warn);
                 }
 
-                ctx = new TestContext(provider, pos, step, _evaluator, _logger, StepReport,
+                ctx = new TestContext(provider, pos, step, _evaluator, _logger, StepReport, StepUpdateReport,
                     s => SampleReported?.Invoke(this, s),
                     (msg, img, okText, cancelText, ct2) => RequestConfirmAsync(pos.Index, step, msg, img, okText, cancelText, ct2))
                 { SerialNumber = serialNo };
@@ -473,8 +486,8 @@ public sealed class TestRunner
                 var fatal = false;
                 try
                 {
-                    // handler 的 DeviceFamily 即其所属清单 Key（转换生成），故按清单 Key 解析
-                    var handler = ResolveHandler(manifest.Key, step.Kind);
+                    // 按清单 DeviceFamily（产品代号）解析处理器，设备特有优先，回落通用
+                    var handler = ResolveHandler(manifest.DeviceFamily, step.Kind);
                     if (handler is null)
                     {
                         result = StepResult.Error($"未注册测试项处理器：设备={manifest.DeviceFamily} Kind={step.Kind}");
@@ -742,6 +755,7 @@ public sealed class TestRunner
             };
             var ctx = new TestContext(provider, firstPos, placeholderStep, _evaluator, _logger,
                 (msg, lvl) => Message?.Invoke(this, new RealtimeMessageEventArgs { PositionIndex = firstPos.Index, Message = msg, Level = lvl }),
+                (msg, lvl) => Message?.Invoke(this, new RealtimeMessageEventArgs { PositionIndex = firstPos.Index, Message = msg, Level = lvl, IsUpdate = true }),
                 confirm: (msg, img, okText, cancelText, ct2) => RequestConfirmAsync(firstPos.Index, placeholderStep, msg, img, okText, cancelText, ct2));
 
             _logger.LogInformation("{Step} 开始（DeviceFamily={Family}）", stepName, manifest.DeviceFamily);

@@ -19,6 +19,11 @@ internal sealed class TestContext : ITestContext
     private readonly Action<string, RealtimeLevel> _report;
 
     /// <summary>
+    /// 更新最后一条消息回调（用于倒计时等场景，可空）。
+    /// </summary>
+    private readonly Action<string, RealtimeLevel>? _updateReport;
+
+    /// <summary>
     /// 采样点回调（实时推 UI 曲线，可空）。
     /// </summary>
     private readonly Action<SampleEventArgs>? _onSample;
@@ -69,6 +74,7 @@ internal sealed class TestContext : ITestContext
     /// <param name="evaluator">判定器。</param>
     /// <param name="logger">日志。</param>
     /// <param name="report">实时消息回调。</param>
+    /// <param name="updateReport">更新最后一条消息回调（可空）。</param>
     /// <param name="onSample">采样点回调（可空）。</param>
     /// <param name="confirm">人工确认回调（可空——无 UI 订阅时 ConfirmAsync 返回 false）。</param>
     public TestContext(
@@ -78,6 +84,7 @@ internal sealed class TestContext : ITestContext
         IConditionEvaluator evaluator,
         ILogger logger,
         Action<string, RealtimeLevel> report,
+        Action<string, RealtimeLevel>? updateReport = null,
         Action<SampleEventArgs>? onSample = null,
         Func<string, string?, string?, string?, CancellationToken, Task<bool>>? confirm = null
     )
@@ -88,6 +95,7 @@ internal sealed class TestContext : ITestContext
         Evaluator = evaluator;
         Logger = logger;
         _report = report;
+        _updateReport = updateReport;
         _onSample = onSample;
         _confirm = confirm;
     }
@@ -148,6 +156,16 @@ internal sealed class TestContext : ITestContext
     public void Report(string message, RealtimeLevel level = RealtimeLevel.Info)
     {
         _report(message, level);
+    }
+
+    /// <summary>
+    /// 更新最后一条实时消息（用于倒计时等场景，原地更新而非追加新行）。
+    /// </summary>
+    /// <param name="message">新消息内容。</param>
+    /// <param name="level">消息级别。</param>
+    public void UpdateLastReport(string message, RealtimeLevel level = RealtimeLevel.Info)
+    {
+        _updateReport?.Invoke(message, level);
     }
 
     /// <summary>

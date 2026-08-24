@@ -37,6 +37,9 @@ internal sealed class ConST811AOps
     /// <summary>推送实时消息。</summary>
     public void Report(string m, RealtimeLevel l = RealtimeLevel.Info) => _ctx.Report(m, l);
 
+    /// <summary>更新最后一条实时消息（用于倒计时等场景，原地更新而非追加新行）。</summary>
+    public void UpdateLastReport(string m, RealtimeLevel l = RealtimeLevel.Info) => _ctx.UpdateLastReport(m, l);
+
     /// <summary>步骤开始：报告正在执行的操作（用 ○ 标记）。</summary>
     public void Step(string desc) => Report($"○ {desc}");
 
@@ -182,7 +185,7 @@ public sealed class LeakTestSingle_BPConST811AHandler : IStepHandler
     /// <summary>处理的测试项类型。</summary>
     public string Kind => "LeakTestSingle_BP";
     /// <summary>限定设备家族（仅 ConST811A 的板使用）。</summary>
-    public string? DeviceFamily => "ConST811A_BP_Machine";
+    public string? DeviceFamily => "P21";
 
     /// <summary>执行本测试项。</summary>
     public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
@@ -212,7 +215,10 @@ public sealed class LeakTestSingle_BPConST811AHandler : IStepHandler
         if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetPressureUnit_IPM", null, ct), "设定内部模块压力单位"))) pass = false;
 
         // 获取压力控制量程范围
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("GetSetPointLimitPressureRange", null, ct), "获取压力控制量程范围"))) pass = false;
+        // 获取压力控制量程范围（Lower~Upper）
+        var rangeTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetSetPointLimitPressureRange", null, ct), "获取压力控制量程范围");
+        if (rangeTxt is null) pass = false;
+        else op.Report("压力控制量程范围 = {rangeTxt} kPa");
 
         Pressure InnerModulePressureUpper = new Pressure(0, "kPa"); // 量程上限
         Pressure getInternalModulePressure30SFirst = new Pressure(0, "kPa");
@@ -227,7 +233,7 @@ public sealed class LeakTestSingle_BPConST811AHandler : IStepHandler
         else pass = false;
 
         // 设置压力目标（上限）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureUpper.ToString() }, ct), "设置上限压力目标"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureUpper.Value.ToString(CultureInfo.InvariantCulture) }, ct), "设置上限压力目标"))) pass = false;
 
         // 轮询 GetPressure_IPM 直到 rate<0.05（控压到位）或超时
         var upperPollGuard = 0;
@@ -317,7 +323,7 @@ public sealed class LeakTestSingle_BPConST811AHandler : IStepHandler
         else pass = false;
 
         // 设置压力目标（下限）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureLowerer.ToString() }, ct), "设置下限压力目标"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureLowerer.Value.ToString(CultureInfo.InvariantCulture) }, ct), "设置下限压力目标"))) pass = false;
 
         // 轮询 GetPressure_IPM 直到 rate<=0.05（控压到位）或超时
         var lowerPollGuard = 0;
@@ -394,8 +400,8 @@ public sealed class LeakTestSingle_BPConST811AHandler : IStepHandler
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_H", "Close" }, ct);
         await op.Dut.CommandAsync("SetModuleStableEnable", new[]{ "InnerModule_L", "Close" }, ct);
 
-        if (pass) op.Ok("高压量程压力泄露测试和排空测试通过");
-        else op.Fail("高压量程压力泄露测试和排空测试未通过");
+
+
         return pass ? StepResult.Pass("高压量程压力泄露测试和排空测试通过") : StepResult.Fail("高压量程压力泄露测试和排空测试未通过");
     }
 }
@@ -408,7 +414,7 @@ public sealed class PressureControlTest_BPConST811AHandler : IStepHandler
     /// <summary>处理的测试项类型。</summary>
     public string Kind => "PressureControlTest_BP";
     /// <summary>限定设备家族（仅 ConST811A 的板使用）。</summary>
-    public string? DeviceFamily => "ConST811A_BP_Machine";
+    public string? DeviceFamily => "P21";
 
     /// <summary>执行本测试项。</summary>
     public async Task<StepResult> ExecuteAsync(ITestContext ctx, CancellationToken ct = default)
@@ -466,7 +472,7 @@ public sealed class PressureControlTest_BPConST811AHandler : IStepHandler
             op.Report($"压力点{postiveSetPoint[i]}*FS: {resultValue}{InnerModulePressureUpper.Unit}");
             setInnerPressure = new Pressure(resultValue, InnerModulePressureUpper.Unit);
             // 设置压力目标
-            if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ setInnerPressure.ToString() }, ct), $"设定{resultValue}{InnerModulePressureUpper.Unit}压力值"))) { pass = false; break; }
+            if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ setInnerPressure.Value.ToString(CultureInfo.InvariantCulture) }, ct), $"设定{resultValue}{InnerModulePressureUpper.Unit}压力值"))) { pass = false; break; }
             bool isControlLangRange = postiveSetPoint[i] == 1;
             // 控压情况轮询：直到稳定且在允差内或超时
             var pollGuard = 0;
@@ -522,7 +528,7 @@ public sealed class PressureControlTest_BPConST811AHandler : IStepHandler
             op.Report($"压力点{negativeSetPoint[j]}*FS: {resultValue:F2}{InnerModulePressureLowerer.Unit}");
             setInnerPressure = new Pressure(resultValue, InnerModulePressureLowerer.Unit);
             // 设置压力目标
-            if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ setInnerPressure.ToString() }, ct), $"设定{resultValue:F2}{InnerModulePressureLowerer.Unit}压力值"))) { pass = false; break; }
+            if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ setInnerPressure.Value.ToString(CultureInfo.InvariantCulture) }, ct), $"设定{resultValue:F2}{InnerModulePressureLowerer.Unit}压力值"))) { pass = false; break; }
             bool isControlLangRange = negativeSetPoint[j] == 1;
             // 控压情况轮询
             var pollGuard = 0;

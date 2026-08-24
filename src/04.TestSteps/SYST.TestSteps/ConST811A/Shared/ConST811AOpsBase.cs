@@ -38,6 +38,9 @@ internal class ConST811AOpsBase
     /// <summary>推送实时消息。</summary>
     public void Report(string m, RealtimeLevel l = RealtimeLevel.Info) => _ctx.Report(m, l);
 
+    /// <summary>更新最后一条实时消息（用于倒计时等场景，原地更新而非追加新行）。</summary>
+    public void UpdateLastReport(string m, RealtimeLevel l = RealtimeLevel.Info) => _ctx.UpdateLastReport(m, l);
+
     /// <summary>步骤开始：报告正在执行的操作（用 ○ 标记）。</summary>
     public void Step(string desc) => Report($"○ {desc}");
 

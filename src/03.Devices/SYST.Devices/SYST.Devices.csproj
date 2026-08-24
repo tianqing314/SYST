@@ -24,6 +24,12 @@
     <Reference Include="Xmas11.Comm.Devices.ZCZH"><HintPath>$(X11)\Xmas11.Comm.Devices.ZCZH.dll</HintPath><Private>true</Private></Reference>
     <Reference Include="Xmas11.Comm.Devices.DPG2"><HintPath>$(X11)\Xmas11.Comm.Devices.DPG2.dll</HintPath><Private>true</Private></Reference>
     <Reference Include="Xmas11.Comm.Devices.APC2"><HintPath>$(X11)\Xmas11.Comm.Devices.APC2.dll</HintPath><Private>true</Private></Reference>
+    <!-- ConST560 被检：E05Base -->
+    <Reference Include="Xmas11.Comm.Devices.E05"><HintPath>$(X11)\Xmas11.Comm.Devices.E05.dll</HintPath><Private>true</Private></Reference>
+    <!-- ConST660 温度检定炉：ATCBase -->
+    <Reference Include="Xmas11.Comm.Devices.ATC"><HintPath>$(X11)\Xmas11.Comm.Devices.ATC.dll</HintPath><Private>true</Private></Reference>
+    <!-- ConST685 过程校验仪：TAUBase -->
+    <Reference Include="Xmas11.Comm.Devices.TAU"><HintPath>$(X11)\Xmas11.Comm.Devices.TAU.dll</HintPath><Private>true</Private></Reference>
     <Reference Include="Xmas11.Comm.Devices.HPC"><HintPath>$(X11)\Xmas11.Comm.Devices.HPC.dll</HintPath><Private>true</Private></Reference>
     <Reference Include="Xmas11.Comm.Device.ConSTGZ811A"><HintPath>$(X11)\Xmas11.Comm.Device.ConSTGZ811A.dll</HintPath><Private>true</Private></Reference>
     <Reference Include="Xmas11.Domain"><HintPath>$(X11)\Xmas11.Domain.dll</HintPath><Private>true</Private></Reference>

@@ -25,11 +25,6 @@ public sealed class ConST560SimulatedDut : IConST560Dut
     /// <summary>是否已连接。</summary>
     public bool IsConnected { get; private set; }
 
-    /// <summary>
-    /// 用设备描述符构造仿真被检。
-    /// </summary>
-    /// <param name="descriptor">设备描述符。</param>
-    /// <param name="logger">日志。</param>
     public ConST560SimulatedDut(DeviceDescriptor descriptor, ILogger logger)
     {
         Key = descriptor.Model;
@@ -37,7 +32,6 @@ public sealed class ConST560SimulatedDut : IConST560Dut
         _logger = logger;
     }
 
-    /// <summary>仿真连接。</summary>
     public async Task ConnectAsync(CancellationToken ct = default)
     {
         await Task.Delay(30, ct);
@@ -45,32 +39,27 @@ public sealed class ConST560SimulatedDut : IConST560Dut
         _logger.LogInformation("ConST560 仿真连接成功");
     }
 
-    /// <summary>补充连接（仿真直接成功）。</summary>
     public Task<bool> ReplenishLinkAsync(CancellationToken ct = default)
     {
         IsConnected = true;
         return Task.FromResult(true);
     }
 
-    /// <summary>仿真读序列号（型号 + 时间戳）。</summary>
     public async Task<string> ReadSerialNumberAsync(CancellationToken ct = default)
     {
         await Task.Delay(20, ct);
         return $"{Model}{DateTime.Now:yyMMddHHmmss}";
     }
 
-    /// <summary>仿真读固件版本。</summary>
     public Task<string> ReadFirmwareVersionAsync(CancellationToken ct = default)
         => Task.FromResult("HFC V2.0.0.33");
 
-    /// <summary>仿真写初始信息（仅记录日志）。</summary>
     public Task WriteInitInfoAsync(string boardType, CancellationToken ct = default)
     {
         _logger.LogInformation("ConST560 写入初始信息：{Type}", boardType);
         return Task.CompletedTask;
     }
 
-    /// <summary>仿真读某测量点。</summary>
     public Task<double> MeasureAsync(string point, CancellationToken ct = default)
         => Task.FromResult(point switch
         {
@@ -78,29 +67,40 @@ public sealed class ConST560SimulatedDut : IConST560Dut
             _ => new Random().NextDouble(),
         });
 
-    /// <summary>设置被检序列号（仿真直接成功）。</summary>
     public Task<bool> SetSerialNumberAsync(string serialNumber, CancellationToken ct = default)
     {
         _logger.LogInformation("ConST560 设置序列号：{SN}", serialNumber);
         return Task.FromResult(true);
     }
 
-    /// <summary>设置产品型号/主设备类型（仿真直接成功）。</summary>
     public Task<bool> SetPrimaryDeviceTypeAsync(string deviceType, CancellationToken ct = default)
     {
         _logger.LogInformation("ConST560 设置产品型号：{Type}", deviceType);
         return Task.FromResult(true);
     }
 
-    /// <summary>
-    /// 通用布尔查询（仿真按方法名返回让自检通过的标称结果）。
-    /// 覆盖 ConST560 旧脚本中使用的关键方法名，其余兜底 true。
-    /// </summary>
     public Task<bool> QueryBooleanAsync(string method, object? arg, CancellationToken ct = default)
     {
         _logger.LogDebug("ConST560 QueryBoolean: {Method}", method);
         return Task.FromResult(method switch
         {
+            "设置检测状态" => true,
+            "设置检测功能" => true,
+            "读取检测结果" => true,
+            "设置是否支持模块" => true,
+            "设置WLAN当前状态" => true,
+            "设置蓝牙开关状态" => true,
+            "设置当前系统亮度" => true,
+            "设置当前系统音量值" => true,
+            "设置电池节能模式信息" => true,
+            "设置自动设置时间状态" => true,
+            "设置当前日期" => true,
+            "设置当前时间" => true,
+            "设置序列号" => true,
+            "设置型号" => true,
+            "设置通道功能" => true,
+            "设置输出值" => true,
+            "设置检测结果" => true,
             "SetSelfCheck" => true,
             "GetSelfCheck" => true,
             "SetCheckerOpen" => true,
@@ -172,14 +172,28 @@ public sealed class ConST560SimulatedDut : IConST560Dut
         });
     }
 
-    /// <summary>
-    /// 通用文本查询（仿真按方法名返回合理文本）。
-    /// </summary>
     public Task<string> QueryTextAsync(string method, object? arg, CancellationToken ct = default)
     {
         _logger.LogDebug("ConST560 QueryText: {Method}", method);
         return Task.FromResult(method switch
         {
+            "读取序列号" => $"{Model}{DateTime.Now:yyMMddHHmmss}",
+            "读取型号" => "ConST560",
+            "读取设备版本信息" => "HOST V1.0.0",
+            "读取HART搜索到的设备列表" => "1",
+            "读取FF搜索到的设备列表" => "1",
+            "读取蓝牙开关状态" => "1",
+            "读取当前蓝牙名称" => "ConST560",
+            "读取当前蓝牙MAC地址" => "AA:BB:CC:DD:EE:FF",
+            "读取是否支持模块" => "1",
+            "读取WLAN当前状态" => "1",
+            "读取WLAN当前所有信息" => "Connected RDTEST IP=192.168.1.100",
+            "读取诊断信息" => "1:5.05&3:1&4:16.5",
+            "获取组件连接状态" => "1",
+            "读取过流状态" => "OK",
+            "读取过压状态" => "OK",
+            "读取测量值" => "12.000",
+            "查询电池电量信息" => "65",
             "GetRS1" => "",
             "GetRS2" => "系统版本：V1.0.5\r\n电测版本：V1.0.5\r\n控制版本：APC-V1.0.5\r\n",
             "GetDUTSN" => $"{Model}{DateTime.Now:yyMMddHHmmss}",
@@ -202,18 +216,12 @@ public sealed class ConST560SimulatedDut : IConST560Dut
         });
     }
 
-    /// <summary>
-    /// 通用指令执行（仿真仅记录日志）。
-    /// </summary>
     public Task CommandAsync(string method, object? arg, CancellationToken ct = default)
     {
         _logger.LogDebug("ConST560 Command: {Method}", method);
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// 释放（置未连接）。
-    /// </summary>
     public ValueTask DisposeAsync()
     {
         IsConnected = false;

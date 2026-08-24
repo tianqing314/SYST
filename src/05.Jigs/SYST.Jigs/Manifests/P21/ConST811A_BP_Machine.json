@@ -18,11 +18,7 @@
     {
       "Key": "GZP21",
       "Name": "811A工装",
-      "Model": "ConST811ATestTool",
-      "Comm": {
-        "Link": "Ethernet",
-        "Port": 8899
-      }
+      "Model": "ConST811ATestTool"
     }
   ],
   "Positions": [
@@ -100,7 +96,7 @@
       "Settings": {
         "ProductModel": "ConST811A-BP"
       },
-      "StepType": "Manual",
+      "StepType": "Auto",
       "TimeoutMs": 60000,
       "Parameters": [],
       "Conditions": [],

@@ -38,6 +38,9 @@ internal sealed class ConST811AOps
     /// <summary>推送实时消息。</summary>
     public void Report(string m, RealtimeLevel l = RealtimeLevel.Info) => _ctx.Report(m, l);
 
+    /// <summary>更新最后一条实时消息（用于倒计时等场景，原地更新而非追加新行）。</summary>
+    public void UpdateLastReport(string m, RealtimeLevel l = RealtimeLevel.Info) => _ctx.UpdateLastReport(m, l);
+
     /// <summary>真机稳定延时（继电器切档/设值后需等待）。PORT: 旧 Thread.Sleep / ScriptHelper.Thread_Sleep。</summary>
     public Task Sleep(int ms)
     {
@@ -161,7 +164,7 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
     /// <summary>处理的测试项类型。</summary>
     public string Kind => "LeakTestComposition_Low_MP";
     /// <summary>限定设备家族（仅 ConST811A 的板使用）。</summary>
-    public string? DeviceFamily => "ConST811A_MP_Machine";
+    public string? DeviceFamily => "P21";
 
     /// <summary>执行本测试项。</summary>
     /// <param name="ctx">测试项上下文。</param>
@@ -194,7 +197,10 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
         if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetPressureUnit_IPM", null, ct), "设定内部模块压力单位"))) pass = false;
 
         // 获取压力控制量程范围（规则1）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("GetSetPointLimitPressureRange", null, ct), "获取压力控制量程范围"))) pass = false;
+        // 获取压力控制量程范围（Lower~Upper）
+        var rangeTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetSetPointLimitPressureRange", null, ct), "获取压力控制量程范围");
+        if (rangeTxt is null) pass = false;
+        else op.Report("压力控制量程范围 = {rangeTxt} kPa");
         // DevicePressureRange 仅用于旧脚本日志，本平台不再使用（dead variable，已删除）
 
         Pressure InnerModulePressureUpper = new Pressure(0, "kPa");//量程上限
@@ -225,7 +231,7 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
             pass = false;
 
         // 设置压力目标（规则2：失败日志+ConfirmAsync → TryCommand）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureLowerer.ToString() }, ct), "设置压力目标"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureLowerer.Value.ToString(CultureInfo.InvariantCulture) }, ct), "设置压力目标"))) pass = false;
 
         // state 在新平台用字符串 stateTxt.Contains("Stable") 判断（见 BP 文件），无需声明枚举
         var VP1s = new List<double>();
@@ -336,7 +342,7 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
             pass = false;
 
         // 设置压力目标（规则2）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureUpper.ToString() }, ct), "设置压力目标"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureUpper.Value.ToString(CultureInfo.InvariantCulture) }, ct), "设置压力目标"))) pass = false;
 
         var VP2s = new List<double>();
 
@@ -482,7 +488,7 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
             TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
             Channels = new[] { new ProcessChannel("正压压力变化", P2s.ToArray()) }
         });
-        op.Report(pass ? "✓ 低压量程压力泄露测试和排空测试通过" : "✗ 低压量程压力泄露测试和排空测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+        
         return pass ? StepResult.Pass("低压量程压力泄露测试和排空测试通过") : StepResult.Fail("低压量程压力泄露测试和排空测试未通过");
     }
 }
@@ -495,7 +501,7 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
     /// <summary>处理的测试项类型。</summary>
     public string Kind => "LeakTestComposition_High_MP";
     /// <summary>限定设备家族（仅 ConST811A 的板使用）。</summary>
-    public string? DeviceFamily => "ConST811A_MP_Machine";
+    public string? DeviceFamily => "P21";
 
     /// <summary>执行本测试项。</summary>
     /// <param name="ctx">测试项上下文。</param>
@@ -531,7 +537,10 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
         if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetPressureUnit_IPM", null, ct), "设定内部模块压力单位"))) pass = false;
 
         // 获取压力控制量程范围（规则1）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("GetSetPointLimitPressureRange", null, ct), "获取压力控制量程范围"))) pass = false;
+        // 获取压力控制量程范围（Lower~Upper）
+        var rangeTxt = await op.TryQueryValue(() => op.Dut.QueryTextAsync("GetSetPointLimitPressureRange", null, ct), "获取压力控制量程范围");
+        if (rangeTxt is null) pass = false;
+        else op.Report("压力控制量程范围 = {rangeTxt} kPa");
         // DevicePressureRange 仅用于旧脚本日志，本平台不再使用（dead variable，已删除）
 
         Pressure InnerModulePressureUpper = new Pressure(0, "kPa");//量程上限
@@ -562,7 +571,7 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
             pass = false;
 
         // 设置压力目标（规则2）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureLowerer.ToString() }, ct), "设置压力目标"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureLowerer.Value.ToString(CultureInfo.InvariantCulture) }, ct), "设置压力目标"))) pass = false;
         // state 在新平台用字符串 stateTxt.Contains("Stable") 判断（见 BP 文件），无需声明枚举
 
         var VP1s = new List<double>();
@@ -674,7 +683,7 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
             pass = false;
 
         // 设置压力目标（规则2）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureUpper.ToString() }, ct), "设置压力目标"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ InnerModulePressureUpper.Value.ToString(CultureInfo.InvariantCulture) }, ct), "设置压力目标"))) pass = false;
 
         var VP2s = new List<double>();
 
@@ -823,7 +832,7 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
             TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
             Channels = new[] { new ProcessChannel("正压压力变化", P2s.ToArray()) }
         });
-        op.Report(pass ? "✓ 高压量程压力泄露测试和排空测试通过" : "✗ 高压量程压力泄露测试和排空测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);
+        
         return pass ? StepResult.Pass("高压量程压力泄露测试和排空测试通过") : StepResult.Fail("高压量程压力泄露测试和排空测试未通过");
     }
 }
@@ -836,7 +845,7 @@ public sealed class TestFlowConST811AHandler : IStepHandler
     /// <summary>处理的测试项类型。</summary>
     public string Kind => "TestFlow";
     /// <summary>限定设备家族（仅 ConST811A 的板使用）。</summary>
-    public string? DeviceFamily => "ConST811A_MP_Machine";
+    public string? DeviceFamily => "P21";
 
     /// <summary>执行本测试项。</summary>
     /// <param name="ctx">测试项上下文。</param>
@@ -871,7 +880,7 @@ public sealed class TestFlowConST811AHandler : IStepHandler
         if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetPressureUnit_IPM", null, ct), "设定内部模块压力单位"))) pass = false;
 
         // 设定第一个压力值（规则2）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ PressureFirstValue.ToString() }, ct), $"设定{PressureFirstValue}压力值"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ PressureFirstValue.Value.ToString(CultureInfo.InvariantCulture) }, ct), $"设定{PressureFirstValue.Value} kPa压力值"))) pass = false;
 
         var VP1s = new List<double>();
 
@@ -894,7 +903,7 @@ public sealed class TestFlowConST811AHandler : IStepHandler
         await op.Dut.CommandAsync("GetPressure_IPM", null, ct);
 
         // 设定第二个压力值（规则2）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ PressureSecondValue.ToString() }, ct), $"设定{PressureSecondValue}压力值"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ PressureSecondValue.Value.ToString(CultureInfo.InvariantCulture) }, ct), $"设定{PressureSecondValue.Value} kPa压力值"))) pass = false;
 
         StarTimePressUp = DateTime.Now;
         {
@@ -939,7 +948,7 @@ public sealed class V6ValveOpenTestConST811AHandler : IStepHandler
     /// <summary>处理的测试项类型。</summary>
     public string Kind => "V6ValveOpenTest";
     /// <summary>限定设备家族（仅 ConST811A 的板使用）。</summary>
-    public string? DeviceFamily => "ConST811A_MP_Machine";
+    public string? DeviceFamily => "P21";
 
     /// <summary>执行本测试项。</summary>
     /// <param name="ctx">测试项上下文。</param>
@@ -982,7 +991,7 @@ public sealed class V6ValveOpenTestConST811AHandler : IStepHandler
         PressureRange ModulePressure = new PressureRange(mpLower, mpUpper, "kPa");
 
         // 设定内部模块压力目标（规则1）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ innerPressureUpper.ToString() }, ct), "设定内部模块压力"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ innerPressureUpper.Value.ToString(CultureInfo.InvariantCulture) }, ct), "设定内部模块压力"))) pass = false;
 
         // 获取内部模块压力（规则2）
         if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("GetPressure_IPM", null, ct), "获取内部模块压力"))) pass = false;
@@ -1006,7 +1015,7 @@ public sealed class V6ValveOpenTestConST811AHandler : IStepHandler
         if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("GetSupplyPressure", null, ct), "获取正压气源"))) pass = false;
 
         // 设定压力模块量程上限目标（规则1；ModulePressure.UpperValue 已从设备读取实际值）
-        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ ModulePressure.UpperValue.ToString() }, ct), "设定压力模块量程上限"))) pass = false;
+        if (!(await op.TryCommand(() => op.Dut.QueryBooleanAsync("SetTargetPressure", new[]{ ModulePressure.UpperValue.ToString(CultureInfo.InvariantCulture) }, ct), "设定压力模块量程上限"))) pass = false;
 
         await op.Sleep(2000);
         await op.Dut.CommandAsync("GetPressure_IPM", null, ct);

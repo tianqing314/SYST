@@ -2,17 +2,67 @@
   "Key": "ConST560_SelfCheck_Machine",
   "DeviceFamily": "E05",
   "BoardName": "ConST560",
-  "Description": "ConST560 手持校验仪整机自检测试（自动转换自旧平台 E05 ConST560_SelfCheck.json 37 步业务）",
+  "Description": "ConST560 手持校验仪整机自检测试（依据旧平台 E05 ConST575_SelfCheck 37 步顺序实现）",
   "Dut": {
     "Name": "ConST560",
     "Model": "ConST560",
-    "ProductModel": "ConST560"
+    "ProductModel": "ConST560",
+    "Comm": {
+      "Link": "Serial",
+      "PhysicalLink": "COM33",
+      "Serial": {
+        "Baud": 9600,
+        "DataBits": 8,
+        "StopBits": "Two",
+        "Parity": "None"
+      }
+    }
   },
   "ToolDevices": [
     {
       "Key": "ZQWL",
       "Name": "齿轮箱工装",
-      "Model": "ZQWLRelayMatrix"
+      "Model": "ZQWLRelayMatrix",
+      "Comm": {
+        "Link": "Serial",
+        "PhysicalLink": "COM3",
+        "Serial": {
+          "Baud": 115200,
+          "DataBits": 8,
+          "StopBits": "One",
+          "Parity": "None"
+        }
+      }
+    },
+    {
+      "Key": "ConST326",
+      "Name": "标准信号源",
+      "Model": "ConST326",
+      "Comm": {
+        "Link": "Serial",
+        "PhysicalLink": "COM32",
+        "Serial": {
+          "Baud": 9600,
+          "DataBits": 8,
+          "StopBits": "Two",
+          "Parity": "None"
+        }
+      }
+    },
+    {
+      "Key": "ZCZH",
+      "Name": "VA采集器",
+      "Model": "ZCZH",
+      "Comm": {
+        "Link": "Serial",
+        "PhysicalLink": "COM31",
+        "Serial": {
+          "Baud": 9600,
+          "DataBits": 8,
+          "StopBits": "One",
+          "Parity": "None"
+        }
+      }
     }
   ],
   "Positions": [
@@ -23,388 +73,404 @@
   ],
   "Steps": [
     {
-      "Key": "ConST560_BenchPreparation",
+      "Key": "BenchPreparation",
       "Kind": "ConST560SelfCheck",
       "Name": "工装准备",
-      "Description": "ConST560 工装准备",
-      "Settings": {},
+      "Description": "开始测试前人工确认工装/被检就绪，执行探针、TYPE-C、航插、夹爪与充电回路动作。",
+      "Settings": {
+        "BusCategory": "E05"
+      },
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0001"
+      "Guid": "e05-560-0001"
     },
     {
-      "Key": "ConST560_PowerOnTime",
+      "Key": "PowerOnTime",
       "Kind": "ConST560SelfCheck",
-      "Name": "开机时间测试",
-      "Description": "ConST560 开机时间测试",
+      "Name": "开机时间",
+      "Description": "人工确认开机后建立连接并记录开机连接耗时。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0002"
+      "Guid": "e05-560-0002"
     },
     {
-      "Key": "ConST560_TimeDate",
+      "Key": "TimeDate",
       "Kind": "ConST560SelfCheck",
-      "Name": "日期时间测试",
-      "Description": "ConST560 日期时间测试",
+      "Name": "时间日期",
+      "Description": "读取并比对系统时间与被检时间。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0003"
+      "Guid": "e05-560-0003"
     },
     {
-      "Key": "ConST560_SNNumberWrite",
+      "Key": "SNNumberWrite",
       "Kind": "ConST560SelfCheck",
-      "Name": "序列号写入",
-      "Description": "ConST560 序列号写入",
+      "Name": "SN号写入",
+      "Description": "写入并回读 SN。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0004"
+      "Guid": "e05-560-0004"
     },
     {
-      "Key": "ConST560_TypeWrite",
+      "Key": "TypeWrite",
       "Kind": "ConST560SelfCheck",
-      "Name": "设备类型写入",
-      "Description": "ConST560 设备类型写入",
-      "Settings": {},
+      "Name": "型号写入",
+      "Description": "写入并回读设备型号。",
+      "Settings": {
+        "DeviceType": "ConST560"
+      },
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0005"
+      "Guid": "e05-560-0005"
     },
     {
-      "Key": "ConST560_VersionThisVerify",
+      "Key": "VersionThisVerify",
       "Kind": "ConST560SelfCheck",
       "Name": "版本验证",
-      "Description": "ConST560 版本验证",
-      "Settings": {},
+      "Description": "读取固件/主机/电测/总线 DD 版本并与预期比对，不一致时弹窗确认。",
+      "Settings": {
+        "ExpectedFirmware": "HFC V2.0.0.33",
+        "ModuleVersions": "HOST固件版本=HFC V2.0.0.33;E-H固件版本=E-H V1.1.0.9;HART_DD库版本=V1.0.0.2;FF_DD库版本=V1.0.0.1;PA_DD库版本=V1.0.0.2"
+      },
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0006"
+      "Guid": "e05-560-0006"
     },
     {
-      "Key": "ConST560_ScreenBadPoint",
+      "Key": "ScreenBadPoint",
       "Kind": "ConST560SelfCheck",
-      "Name": "屏幕坏点测试",
-      "Description": "ConST560 屏幕坏点测试",
+      "Name": "屏幕坏点",
+      "Description": "启动被检屏幕坏点检测并等待人工确认。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0007"
+      "Guid": "e05-560-0007"
     },
     {
-      "Key": "ConST560_ScreenTouch",
+      "Key": "ScreenTouch",
       "Kind": "ConST560SelfCheck",
-      "Name": "触摸屏测试",
-      "Description": "ConST560 触摸屏测试",
+      "Name": "屏幕触摸",
+      "Description": "启动被检屏幕触摸检测并等待人工确认。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0008"
+      "Guid": "e05-560-0008"
     },
     {
-      "Key": "ConST560_EntityKey",
+      "Key": "EntityKey",
       "Kind": "ConST560SelfCheck",
-      "Name": "实体按键测试",
-      "Description": "ConST560 实体按键测试",
+      "Name": "实体按键",
+      "Description": "启动被检实体按键检测并等待人工确认。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0009"
+      "Guid": "e05-560-0009"
     },
     {
-      "Key": "ConST560_SpeakerMachine",
+      "Key": "SpeakerMachine",
       "Kind": "ConST560SelfCheck",
-      "Name": "扬声器测试",
-      "Description": "ConST560 扬声器测试",
+      "Name": "扬声器",
+      "Description": "启动被检扬声器检测并恢复默认音量。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0010"
+      "Guid": "e05-560-0010"
     },
     {
-      "Key": "ConST560_ScreenBrightDegreeConfirmNeedTest_IfInternalRangeOrderNeedRedoCancel",
+      "Key": "ScreenBrightDegreeConfirmNeedTest_IfInternalRangeOrderNeedRedoCancel",
       "Kind": "ConST560SelfCheck",
-      "Name": "屏幕亮度确认",
-      "Description": "ConST560 屏幕亮度确认",
+      "Name": "屏幕亮度",
+      "Description": "启动屏幕亮度检测并等待人工确认。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0011"
+      "Guid": "e05-560-0011"
     },
     {
-      "Key": "ConST560_WIFI",
+      "Key": "WIFI",
       "Kind": "ConST560SelfCheck",
-      "Name": "WIFI测试",
-      "Description": "ConST560 WIFI测试",
-      "Settings": {},
+      "Name": "WIFI",
+      "Description": "读取/设置 WLAN，连接测试热点并校验。",
+      "Settings": {
+        "WifiSSID": "RDTEST",
+        "WifiPassword": "Consttest"
+      },
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0012"
+      "Guid": "e05-560-0012"
     },
     {
-      "Key": "ConST560_Bluetooth",
+      "Key": "Bluetooth",
       "Kind": "ConST560SelfCheck",
-      "Name": "蓝牙测试",
-      "Description": "ConST560 蓝牙测试",
+      "Name": "蓝牙",
+      "Description": "读取/设置蓝牙状态，由人工完成蓝牙自检确认。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0013"
+      "Guid": "e05-560-0013"
     },
     {
-      "Key": "ConST560_OuterPressureModuleComm",
+      "Key": "OuterPressureModuleComm",
       "Kind": "ConST560SelfCheck",
-      "Name": "外部压力模块通讯",
-      "Description": "ConST560 外部压力模块通讯",
+      "Name": "外接压力模块通讯",
+      "Description": "读取外接压力模块连接状态与版本。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0014"
+      "Guid": "e05-560-0014"
     },
     {
-      "Key": "ConST560_MainBoardSelfCheckInfo",
+      "Key": "MainBoardSelfCheckInfo",
       "Kind": "ConST560SelfCheck",
       "Name": "主板自检信息",
-      "Description": "ConST560 主板自检信息",
+      "Description": "读取 APP/E-H 诊断信息并报告。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0015"
+      "Guid": "e05-560-0015"
     },
     {
-      "Key": "ConST560_CircuitVoltage",
+      "Key": "CircuitVoltage",
       "Kind": "ConST560SelfCheck",
-      "Name": "电路电压测试",
-      "Description": "ConST560 电路电压测试",
+      "Name": "环路电压",
+      "Description": "切换环路诊断档位，ConST326 测量环路电压。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0016"
+      "Guid": "e05-560-0016"
     },
     {
-      "Key": "ConST560_HartInnerSourceInnerResistanceComm",
+      "Key": "HartInnerSourceInnerResistanceComm",
       "Kind": "ConST560SelfCheck",
       "Name": "Hart内源内阻通讯",
-      "Description": "ConST560 Hart内源内阻通讯",
+      "Description": "切换 Hart 通讯工装档位并检查搜索结果。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0017"
+      "Guid": "e05-560-0017"
     },
     {
-      "Key": "ConST560_HartOuterSourceOuterResistanceComm",
+      "Key": "HartOuterSourceOuterResistanceComm",
       "Kind": "ConST560SelfCheck",
       "Name": "Hart外源外阻通讯",
-      "Description": "ConST560 Hart外源外阻通讯",
+      "Description": "切换 Hart 通讯工装档位并检查搜索结果。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0018"
+      "Guid": "e05-560-0018"
     },
     {
-      "Key": "ConST560_HartOuterSourceInnerResistanceComm",
+      "Key": "HartOuterSourceInnerResistanceComm",
       "Kind": "ConST560SelfCheck",
       "Name": "Hart外源内阻通讯",
-      "Description": "ConST560 Hart外源内阻通讯",
+      "Description": "切换 Hart 通讯工装档位并检查搜索结果。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0019"
+      "Guid": "e05-560-0019"
     },
     {
-      "Key": "ConST560_FFOuterSourceOuterResistanceComm",
+      "Key": "FFOuterSourceOuterResistanceComm",
       "Kind": "ConST560SelfCheck",
       "Name": "FF外源外阻通讯",
-      "Description": "ConST560 FF外源外阻通讯",
-      "Settings": {},
+      "Description": "切换 FF 通讯工装档位并检查搜索结果。",
+      "Settings": {
+        "BusCategory": "E05_PAFF"
+      },
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0020"
+      "Guid": "e05-560-0020"
     },
     {
-      "Key": "ConST560_FFInnerSourceInnerResistanceComm",
+      "Key": "FFInnerSourceInnerResistanceComm",
       "Kind": "ConST560SelfCheck",
       "Name": "FF内源内阻通讯",
-      "Description": "ConST560 FF内源内阻通讯",
-      "Settings": {},
+      "Description": "切换 FF 通讯工装档位并检查搜索结果。",
+      "Settings": {
+        "BusCategory": "E05_PAFF"
+      },
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0021"
+      "Guid": "e05-560-0021"
     },
     {
-      "Key": "ConST560_PAOuterSourceOuterResistanceComm",
+      "Key": "PAOuterSourceOuterResistanceComm",
       "Kind": "ConST560SelfCheck",
       "Name": "PA外源外阻通讯",
-      "Description": "ConST560 PA外源外阻通讯",
-      "Settings": {},
+      "Description": "切换 PA 通讯工装档位并检查搜索结果。",
+      "Settings": {
+        "BusCategory": "E05_PAFF"
+      },
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0022"
+      "Guid": "e05-560-0022"
     },
     {
-      "Key": "ConST560_mAOutputOutFunction_SRC",
+      "Key": "mAOutputOutFunction_SRC",
       "Kind": "ConST560SelfCheck",
-      "Name": "mA输出源功能测试",
-      "Description": "ConST560 mA输出源功能测试",
+      "Name": "mA输出功能_SRC",
+      "Description": "ConST326 上电并由被检输出 mA，通过 ZCZH 回测验证。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0023"
+      "Guid": "e05-560-0023"
     },
     {
-      "Key": "ConST560_mAOutputOutFunction_SINK",
+      "Key": "mAOutputOutFunction_SINK",
       "Kind": "ConST560SelfCheck",
-      "Name": "mA输出沉功能测试",
-      "Description": "ConST560 mA输出沉功能测试",
+      "Name": "mA输出功能_SINK",
+      "Description": "ConST326 上电并由被检输出 mA，通过 ZCZH 回测验证。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0024"
+      "Guid": "e05-560-0024"
     },
     {
-      "Key": "ConST560_mAMeasureFunction",
+      "Key": "mAMeasureFunction",
       "Kind": "ConST560SelfCheck",
       "Name": "mA测量功能",
-      "Description": "ConST560 mA测量功能",
+      "Description": "ConST326 输出 mA，被检读取测量值并比对。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0025"
+      "Guid": "e05-560-0025"
     },
     {
-      "Key": "ConST560_OverCurrentTest",
+      "Key": "OverCurrentTest",
       "Kind": "ConST560SelfCheck",
-      "Name": "过流测试",
-      "Description": "ConST560 过流测试",
+      "Name": "过流检测",
+      "Description": "切换 mA 输入并读取过流状态。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0026"
+      "Guid": "e05-560-0026"
     },
     {
-      "Key": "ConST560_VMeasureFunction",
+      "Key": "VMeasureFunction",
       "Kind": "ConST560SelfCheck",
-      "Name": "电压测量功能",
-      "Description": "ConST560 电压测量功能",
+      "Name": "V测量功能",
+      "Description": "ConST326 输出 V，被检读取测量值并比对。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0027"
+      "Guid": "e05-560-0027"
     },
     {
-      "Key": "ConST560_OverPressureTest",
+      "Key": "OverPressureTest",
       "Kind": "ConST560SelfCheck",
-      "Name": "过压测试",
-      "Description": "ConST560 过压测试",
+      "Name": "过压检测",
+      "Description": "ConST326 输出 24V 并读取过压状态。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0028"
+      "Guid": "e05-560-0028"
     },
     {
-      "Key": "ConST560_ChargeElectricityStatusTest",
+      "Key": "ChargeElectricityStatusTest",
       "Kind": "ConST560SelfCheck",
       "Name": "充电状态测试",
-      "Description": "ConST560 充电状态测试",
+      "Description": "ZQWL 接入充电回路并用 ZCZH 读取充电电流。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0029"
+      "Guid": "e05-560-0029"
     },
     {
-      "Key": "ConST560_WholeMachineConsumeTest",
+      "Key": "WholeMachineConsumeTest",
       "Kind": "ConST560SelfCheck",
-      "Name": "整机耗电测试",
-      "Description": "ConST560 整机耗电测试",
+      "Name": "整机功耗测试",
+      "Description": "ConST326 上电后用 ZCZH 采集整机功耗。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0030"
+      "Guid": "e05-560-0030"
     },
     {
-      "Key": "ConST560_ChargeElectricityTest",
+      "Key": "ChargeElectricityTest",
       "Kind": "ConST560SelfCheck",
-      "Name": "充电测试",
-      "Description": "ConST560 充电测试",
+      "Name": "充电检测",
+      "Description": "插入充电 1 分钟并用 ZCZH 校验充电电流。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0031"
+      "Guid": "e05-560-0031"
     },
     {
-      "Key": "ConST560_TestComplete",
+      "Key": "TestComplete",
       "Kind": "ConST560SelfCheck",
-      "Name": "测试完成确认",
-      "Description": "ConST560 测试完成确认",
+      "Name": "测试完成",
+      "Description": "关闭设备、回退所有工装动作并重连被检。",
       "Settings": {},
       "StepType": "Auto",
       "TimeoutMs": 0,
       "Parameters": [],
       "Conditions": [],
-      "Guid": "b2c3d4e5-f6a7-8901-bcde-0032"
+      "Guid": "e05-560-0032"
     }
   ]
 }

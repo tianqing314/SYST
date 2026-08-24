@@ -863,7 +863,7 @@ public partial class PositionViewModel : ObservableObject
         }
 
         var line = new LogLineViewModel(e.At, e.Message, e.Level);
-        Steps.FirstOrDefault(c => string.Equals(c.Key, e.StepKey, StringComparison.OrdinalIgnoreCase))?.AddDetail(line);
+        Steps.FirstOrDefault(c => string.Equals(c.Key, e.StepKey, StringComparison.OrdinalIgnoreCase))?.AddDetail(line, e.IsUpdate);
     }
 
     /// <summary>
@@ -994,12 +994,21 @@ public partial class StepCellViewModel(int positionIndex, int order, string key,
     public string FullProcessText => string.Join("\n", Details.Select(d => $"{d.Time} {d.Message}"));
 
     /// <summary>
-    /// 追加一条过程日志并通知最新日志/完整过程刷新。
+    /// 追加或更新过程日志并通知最新日志/完整过程刷新。
     /// </summary>
     /// <param name="line">日志行。</param>
-    public void AddDetail(LogLineViewModel line)
+    /// <param name="isUpdate">是否更新最后一条消息（用于倒计时等场景）。</param>
+    public void AddDetail(LogLineViewModel line, bool isUpdate = false)
     {
-        Details.Add(line);
+        if (isUpdate && Details.Count > 0)
+        {
+            // 更新最后一条消息
+            Details[^1] = line;
+        }
+        else
+        {
+            Details.Add(line);
+        }
         OnPropertyChanged(nameof(LatestLog));
         OnPropertyChanged(nameof(FullProcessText));
     }
