@@ -122,7 +122,7 @@ public sealed record PositionResult(
     bool Passed);
 
 /// <summary>
-/// 单测试项执行记录（落子表 pcba_test_data_details 一行）。
+/// 单测试项执行记录（落子表 product_test_data_details 一行）。
 /// </summary>
 /// <param name="Step">测试项描述。</param>
 /// <param name="Result">测试项结果。</param>

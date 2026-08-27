@@ -47,17 +47,17 @@ public interface IDutDevice : IDevice
     Task<bool> SetPrimaryDeviceTypeAsync(string deviceType, CancellationToken ct = default);
 
     /// <summary>
-    /// 通用布尔查询（遗留脚本自动转换）。按方法名 + 参数执行设备指令，返回布尔结果。
+    /// 通用布尔查询。按方法名 + 参数执行设备指令，返回布尔结果。
     /// </summary>
     Task<bool> QueryBooleanAsync(string method, object? arg, CancellationToken ct = default);
 
     /// <summary>
-    /// 通用文本查询（遗留脚本自动转换）。按方法名 + 参数执行设备指令，返回文本结果。
+    /// 通用文本查询。按方法名 + 参数执行设备指令，返回文本结果。
     /// </summary>
     Task<string> QueryTextAsync(string method, object? arg, CancellationToken ct = default);
 
     /// <summary>
-    /// 通用指令执行（遗留脚本自动转换）。按方法名 + 参数执行设备指令，无返回值。
+    /// 通用指令执行。按方法名 + 参数执行设备指令，无返回值。
     /// </summary>
     Task CommandAsync(string method, object? arg, CancellationToken ct = default);
 }

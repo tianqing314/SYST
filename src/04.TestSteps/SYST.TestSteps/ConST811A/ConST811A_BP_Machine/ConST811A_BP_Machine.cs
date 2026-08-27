@@ -7,9 +7,8 @@ using SYST.Devices.Abstractions;
 namespace SYST.TestSteps.ConST811A.ConST811A_BP_Machine;
 
 /// <summary>
-/// ConST811A 主板（设备族 ConST811A）测试**设备特有**处理器集合。**自动转换**自旧
-/// <c>ConST811A_MainBoard_Auto.cs</c> 的测试方法与 <c>.distributed.json</c> 任务配置：继电器指令序列
-/// （GZP21 共享工装）、被检指令与 Range 判定。气象版不接 P06/ConST810 标准模块（电压/电流采样）。
+/// ConST811A 主板（设备族 ConST811A）测试处理器集合。
+/// 继电器指令序列（GZP21 共享工装）、被检指令与 Range 判定。气象版不接 P06/ConST810 标准模块。
 /// 工装用 <see cref="IMachineTestTool"/>，被检用 <see cref="IConST811ADut"/>。
 /// </summary>
 internal sealed class ConST811AOps
@@ -80,39 +79,6 @@ internal sealed class ConST811AOps
     {
         Report($"  工装输出指令：{cmd}");
         return Gzp21.SetOutputAsync(cmd, true, _ct);
-    }
-
-    /// <summary>回放旧平台中可直接映射的 P21/GZP21 调用；复杂上下文参数不在此层猜测。</summary>
-    public async Task ExecuteLegacyAsync(IReadOnlyList<string> calls, CancellationToken ct)
-    {
-        foreach (var call in calls)
-        {
-            var p = call.Split('|', 3);
-            if (p.Length < 2) continue;
-            var device = p[0];
-            var method = p[1];
-            var arg = p.Length == 3 ? p[2] : "";
-            IReadOnlyList<string>? args = string.IsNullOrWhiteSpace(arg) ? null : new[] { arg.Trim() };
-            if (device == "GZP21")
-            {
-                var open = !arg.Contains("Close", StringComparison.OrdinalIgnoreCase);
-                var outputName = method.Replace("Set", "").Replace("State", "");
-                await Gzp21.SetOutputAsync(outputName, open, ct);
-                continue;
-            }
-            if (device == "P21")
-            {
-                if (method.StartsWith("Get", StringComparison.OrdinalIgnoreCase) || method.StartsWith("Is", StringComparison.OrdinalIgnoreCase))
-                    _ = await Dut.QueryTextAsync(method, args, ct);
-                else
-                    await Dut.CommandAsync(method, args, ct);
-            }
-            else if (device == "P06")
-            {
-                // 气象版不接 P06 标准模块；旧脚本遗留的 P06 电压/电流调用按跳过处理（无采样设备）
-                Report($"跳过 P06 调用：{method}（本机型未配置 P06 标准模块）", RealtimeLevel.Warn);
-            }
-        }
     }
 
     /// <summary>按名取条件（找不到返回 null）。</summary>

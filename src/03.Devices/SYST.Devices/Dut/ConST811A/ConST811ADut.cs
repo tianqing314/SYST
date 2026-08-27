@@ -16,12 +16,10 @@ using EleMeasureFunction = Xmas11.Comm.Devices.APC2.Data.ElectricMeasureFunction
 namespace SYST.Devices.Dut.ConST811A;
 
 /// <summary>
-/// ConST811A 整机（设备族 ConST811A）被检**真机驱动**：走 Xmas11 <see cref="APC2Device"/> 通讯库（替代原 DPG2SCPI），
-/// 命令层**自动转换**自旧 <c>Bots.TestBench.Device.ConST811A</c>（内部转调 <c>APC2Device.*</c>，返回 <c>iResponse</c>）。
+/// ConST811A 整机（设备族 ConST811A）被检真机驱动：走 Xmas11 <see cref="APC2Device"/> 通讯库。
 /// 被检调用统一走 <see cref="IDutDevice"/> 通用派发入口（QueryBooleanAsync/QueryTextAsync/CommandAsync），
 /// 内部按方法名路由到具体 APC2 调用（见 <see cref="Execute"/> 派发表）。
-/// 连接按 manifest 号位 <see cref="CommEndpoint"/> 的串口/网络参数直接建连；
-/// 针床被检在工装准备上电后才连接（工装准备前不连接，见工装准备处理器 ReplenishLinkAsync）。
+/// 连接按 manifest 号位 <see cref="CommEndpoint"/> 的串口/网络参数直接建连。
 /// 每条命令 <c>iResponse.IsCorrect=false</c> 即抛 <see cref="DeviceCommException"/>，交引擎按异常收尾。
 /// </summary>
 [DutDriver("ConST811A")]
@@ -294,9 +292,9 @@ public sealed class ConST811ADut : IConST811ADut
     public Task<bool> SetPrimaryDeviceTypeAsync(string deviceType, CancellationToken ct = default)
         => Bool(() => Dev.SetPrimaryDevType(deviceType), "设置产品型号", ct);
 
-    // ===== 通用派发入口（遗留脚本自动转换） =====
+    // ===== 通用派发入口 =====
 
-    /// <summary>通用布尔查询（遗留脚本自动转换）。按方法名 + 参数派发到 APC2，返回是否成功。</summary>
+    /// <summary>通用布尔查询。按方法名 + 参数派发到 APC2，返回是否成功。</summary>
     public Task<bool> QueryBooleanAsync(string method, object? arg, CancellationToken ct = default)
         => Task.Run(() =>
         {
@@ -316,7 +314,7 @@ public sealed class ConST811ADut : IConST811ADut
             };
         }, ct);
 
-    /// <summary>通用文本查询（遗留脚本自动转换）。按方法名 + 参数派发到 APC2，返回结果文本；失败抛异常。</summary>
+    /// <summary>通用文本查询。按方法名 + 参数派发到 APC2，返回结果文本；失败抛异常。</summary>
     public Task<string> QueryTextAsync(string method, object? arg, CancellationToken ct = default)
         => Task.Run(() =>
         {
@@ -371,7 +369,7 @@ public sealed class ConST811ADut : IConST811ADut
             };
         }, ct);
 
-    /// <summary>通用指令执行（遗留脚本自动转换）。按方法名 + 参数派发到 APC2，失败抛异常。</summary>
+    /// <summary>通用指令执行。按方法名 + 参数派发到 APC2，失败抛异常。</summary>
     public Task CommandAsync(string method, object? arg, CancellationToken ct = default)
         => Task.Run(() =>
         {

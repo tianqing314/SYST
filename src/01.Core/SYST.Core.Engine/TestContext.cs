@@ -66,6 +66,11 @@ internal sealed class TestContext : ITestContext
     private ProcessDataSeries? _oneShot;
 
     /// <summary>
+    /// 是否已通过 ReportSample 流式推送过数据（避免 RecordProcessData 重复推送）。
+    /// </summary>
+    private bool _streamingUsed;
+
+    /// <summary>
     /// 构造测试项运行上下文。
     /// </summary>
     /// <param name="devices">该号位设备提供者。</param>
@@ -169,12 +174,45 @@ internal sealed class TestContext : ITestContext
     }
 
     /// <summary>
-    /// 一次性记录采集数据序列。
+    /// 记录采集数据序列（存库 + 累积通道供 UI 展示多次循环的曲线）。
+    /// 每次调用追加新通道到 _oneShot，不覆盖已有通道。
     /// </summary>
     /// <param name="series">采集序列。</param>
     public void RecordProcessData(ProcessDataSeries series)
     {
-        _oneShot = series;
+        // 累积到 _oneShot：每次调用追加通道
+        if (_oneShot is null)
+        {
+            _oneShot = series;
+        }
+        else
+        {
+            _oneShot = new ProcessDataSeries
+            {
+                Unit = series.Unit ?? _oneShot.Unit,
+                TimeSec = _oneShot.TimeSec.Count >= series.TimeSec.Count ? _oneShot.TimeSec : series.TimeSec,
+                Channels = [.. _oneShot.Channels, .. series.Channels],
+            };
+        }
+
+        // 若未流式推送过，逐点补发使 UI 曲线展示
+        if (!_streamingUsed && _onSample is not null && series.TimeSec.Count > 0 && series.Channels.Count > 0)
+        {
+            var channelNames = series.Channels.Select(c => c.Name).ToList();
+            for (var i = 0; i < series.TimeSec.Count; i++)
+            {
+                var values = series.Channels.Select(c => i < c.Values.Count ? c.Values[i] : 0.0).ToList();
+                _onSample(new SampleEventArgs
+                {
+                    PositionIndex = Position.Index,
+                    StepKey = Step.Key,
+                    Unit = series.Unit ?? "",
+                    ChannelNames = channelNames,
+                    TimeSec = series.TimeSec[i],
+                    Values = values,
+                });
+            }
+        }
     }
 
     /// <summary>
@@ -202,6 +240,7 @@ internal sealed class TestContext : ITestContext
     /// <param name="values">各通道值。</param>
     public void ReportSample(double timeSec, params double[] values)
     {
+        _streamingUsed = true;
         _time.Add(timeSec);
         for (var i = 0; i < _channelValues.Count && i < values.Length; i++)
         {
@@ -285,4 +324,9 @@ internal sealed class TestContext : ITestContext
                     .ToList(),
             }
             : _oneShot;
+
+    /// <summary>
+    /// 所有 RecordProcessData 调用累积的完整数据（含多次循环的全部通道），供 UI 曲线展示。
+    /// </summary>
+    public ProcessDataSeries? AccumulatedProcessData => _oneShot;
 }

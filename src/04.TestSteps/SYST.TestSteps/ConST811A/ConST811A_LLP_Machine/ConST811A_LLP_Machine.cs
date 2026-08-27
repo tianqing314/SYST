@@ -8,9 +8,8 @@ using SYST.Devices.Abstractions;
 namespace SYST.TestSteps.ConST811A.ConST811A_LLP_Machine;
 
 /// <summary>
-/// ConST811A 主板（设备族 ConST811A）测试**设备特有**处理器集合。**自动转换**自旧
-/// <c>ConST811A_MainBoard_Auto.cs</c> 的测试方法与 <c>.distributed.json</c> 任务配置：继电器指令序列
-/// （GZP21/P06 共享设备）、电压/电流读数、被检指令与 Range 判定。
+/// ConST811A 主板（设备族 ConST811A）测试处理器集合。
+/// 继电器指令序列（GZP21/P06 共享设备）、电压/电流读数、被检指令与 Range 判定。
 /// 工装用 <see cref="IMachineTestTool"/>，被检用 <see cref="IConST811ADut"/>。
 /// </summary>
 internal sealed class ConST811AOps
@@ -96,39 +95,6 @@ internal sealed class ConST811AOps
     /// <summary>读 DAM6803D 某通道电压。PORT: DSTB.GetVoltageMeasureValue。</summary>
     public Task<double> ReadVolt(int channel) => P06.ReadVoltageAsync(channel, _ct);
     public Task<double> ReadCurrent(int channel) => P06.ReadCurrentAsync(channel, _ct);
-    /// <summary>回放旧平台中可直接映射的 P21/GZP21/P06 调用；复杂上下文参数不在此层猜测。</summary>
-    public async Task ExecuteLegacyAsync(IReadOnlyList<string> calls, CancellationToken ct)
-    {
-        foreach (var call in calls)
-        {
-            var p = call.Split('|', 3);
-            if (p.Length < 2) continue;
-            var device = p[0];
-            var method = p[1];
-            var arg = p.Length == 3 ? p[2] : "";
-            IReadOnlyList<string>? args = string.IsNullOrWhiteSpace(arg) ? null : new[] { arg.Trim() };
-            if (device == "GZP21")
-            {
-                var open = !arg.Contains("Close", StringComparison.OrdinalIgnoreCase);
-                var outputName = method.Replace("Set", "").Replace("State", "");
-                await Gzp21.SetOutputAsync(outputName, open, ct);
-                continue;
-            }
-            if (device == "P21")
-            {
-                if (method.StartsWith("Get", StringComparison.OrdinalIgnoreCase) || method.StartsWith("Is", StringComparison.OrdinalIgnoreCase))
-                    _ = await Dut.QueryTextAsync(method, args, ct);
-                else
-                    await Dut.CommandAsync(method, args, ct);
-            }
-            else if (device == "P06")
-            {
-                if (method.Contains("Voltage", StringComparison.OrdinalIgnoreCase)) _ = await P06.ReadVoltageAsync(0, ct);
-                else if (method.Contains("Current", StringComparison.OrdinalIgnoreCase)) _ = await P06.ReadCurrentAsync(0, ct);
-            }
-        }
-    }
-
     /// <summary>按名取条件（找不到返回 null）。</summary>
     public ConditionDescriptor? Cond(string name)
     {
@@ -264,7 +230,7 @@ public sealed class LeakTestComposition_Low_LLPConST811AHandler : IStepHandler
             if (negSrcFirst is null) { failures.Add("读取负压气源压力(第一个值)失败"); pass = false; }
 
             // 30 秒采样（模块压力 + 温度），供曲线与 tvalue
-            var p1s = await LeakTestCompositionHelper.SamplePressureAsync(op, ct, tvalue, 30);
+            var p1s = await LeakTestCompositionHelper.SamplePressureAsync(op, ctx, ct, tvalue, 30);
 
             // 读负压模块压力第二个值 + 负压气源第二个值
             double? negSecond = await LeakTestCompositionHelper.ReadPressureAsync(op, ct, "GetPressure_IPM", "负压模块压力(第二个值)");
@@ -284,7 +250,7 @@ public sealed class LeakTestComposition_Low_LLPConST811AHandler : IStepHandler
             // 负压采样数据入曲线
             ctx.RecordProcessData(new ProcessDataSeries {
                 StartedAt = DateTime.Now,
-                TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+                TimeSec = Enumerable.Range(0, p1s.Count).Select(i => i * 0.15).ToArray(),
                 Channels = new[] { new ProcessChannel("负压泄漏压力变化", p1s.ToArray()) }
             });
         }
@@ -314,7 +280,7 @@ public sealed class LeakTestComposition_Low_LLPConST811AHandler : IStepHandler
             if (posFirst is null) { failures.Add("读取正压模块压力(第一个值)失败"); pass = false; }
             if (posSrcFirst is null) { failures.Add("读取正压气源压力(第一个值)失败"); pass = false; }
 
-            var p2s = await LeakTestCompositionHelper.SamplePressureAsync(op, ct, tvalue, 30);
+            var p2s = await LeakTestCompositionHelper.SamplePressureAsync(op, ctx, ct, tvalue, 30);
 
             double? posSecond = await LeakTestCompositionHelper.ReadPressureAsync(op, ct, "GetPressure_IPM", "正压模块压力(第二个值)");
             double? posSrcSecond = await LeakTestCompositionHelper.ReadPressureAsync(op, ct, "GetSupplyPressure", "正压气源压力(第二个值)");
@@ -331,7 +297,7 @@ public sealed class LeakTestComposition_Low_LLPConST811AHandler : IStepHandler
             if (!(await LeakTestCompositionHelper.VentAsync(op, ct, "排空后压力上限", "正压"))) { failures.Add("正压排空失败"); pass = false; }
             ctx.RecordProcessData(new ProcessDataSeries {
                 StartedAt = DateTime.Now,
-                TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+                TimeSec = Enumerable.Range(0, p2s.Count).Select(i => i * 0.15).ToArray(),
                 Channels = new[] { new ProcessChannel("正压泄漏压力变化", p2s.ToArray()) }
             });
         }
@@ -431,7 +397,7 @@ public sealed class LeakTestComposition_High_LLPConST811AHandler : IStepHandler
             if (negFirst is null) { failures.Add("读取负压模块压力(第一个值)失败"); pass = false; }
             if (negSrcFirst is null) { failures.Add("读取负压气源压力(第一个值)失败"); pass = false; }
 
-            var p1s = await LeakTestCompositionHelper.SamplePressureAsync(op, ct, tvalue, 30);
+            var p1s = await LeakTestCompositionHelper.SamplePressureAsync(op, ctx, ct, tvalue, 30);
 
             double? negSecond = await LeakTestCompositionHelper.ReadPressureAsync(op, ct, "GetPressure_IPM", "负压模块压力(第二个值)");
             double? negSrcSecond = await LeakTestCompositionHelper.ReadPressureAsync(op, ct, "GetVacuumPressure", "负压气源压力(第二个值)");
@@ -447,7 +413,7 @@ public sealed class LeakTestComposition_High_LLPConST811AHandler : IStepHandler
             if (!(await LeakTestCompositionHelper.VentAsync(op, ct, "排空后压力上限", "负压"))) { failures.Add("负压排空失败"); pass = false; }
             ctx.RecordProcessData(new ProcessDataSeries {
                 StartedAt = DateTime.Now,
-                TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+                TimeSec = Enumerable.Range(0, p1s.Count).Select(i => i * 0.15).ToArray(),
                 Channels = new[] { new ProcessChannel("负压泄漏压力变化", p1s.ToArray()) }
             });
         }
@@ -476,7 +442,7 @@ public sealed class LeakTestComposition_High_LLPConST811AHandler : IStepHandler
             if (posFirst is null) { failures.Add("读取正压模块压力(第一个值)失败"); pass = false; }
             if (posSrcFirst is null) { failures.Add("读取正压气源压力(第一个值)失败"); pass = false; }
 
-            var p2s = await LeakTestCompositionHelper.SamplePressureAsync(op, ct, tvalue, 30);
+            var p2s = await LeakTestCompositionHelper.SamplePressureAsync(op, ctx, ct, tvalue, 30);
 
             double? posSecond = await LeakTestCompositionHelper.ReadPressureAsync(op, ct, "GetPressure_IPM", "正压模块压力(第二个值)");
             double? posSrcSecond = await LeakTestCompositionHelper.ReadPressureAsync(op, ct, "GetSupplyPressure", "正压气源压力(第二个值)");
@@ -492,7 +458,7 @@ public sealed class LeakTestComposition_High_LLPConST811AHandler : IStepHandler
             if (!(await LeakTestCompositionHelper.VentAsync(op, ct, "排空后压力上限", "正压"))) { failures.Add("正压排空失败"); pass = false; }
             ctx.RecordProcessData(new ProcessDataSeries {
                 StartedAt = DateTime.Now,
-                TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+                TimeSec = Enumerable.Range(0, p2s.Count).Select(i => i * 0.15).ToArray(),
                 Channels = new[] { new ProcessChannel("正压泄漏压力变化", p2s.ToArray()) }
             });
         }

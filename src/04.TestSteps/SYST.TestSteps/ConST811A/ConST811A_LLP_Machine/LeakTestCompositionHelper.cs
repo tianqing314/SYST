@@ -118,14 +118,16 @@ internal static class LeakTestCompositionHelper
     }
 
     /// <summary>
-    /// 30 秒采样段：循环读模块压力 + 温度，追加到 tvalue，返回采样值列表（用于曲线）。带倒计时显示。
+    /// 30 秒采样段：循环读模块压力 + 温度，追加到 tvalue，返回采样值列表（用于曲线）。
+    /// 每个采样点实时推送 UI 曲线。带倒计时显示。
     /// </summary>
-    public static async Task<List<double>> SamplePressureAsync(ConST811AOps op, CancellationToken ct,
+    public static async Task<List<double>> SamplePressureAsync(ConST811AOps op, ITestContext ctx, CancellationToken ct,
         StringBuilder tvalue, double seconds)
     {
         var samples = new List<double>();
         var t0 = DateTime.Now;
         var lastReported = -1;
+        ctx.BeginSampling("kPa", "模块压力");
         op.Report($"采样中... 剩余{seconds:0}s");
         while (true)
         {
@@ -136,13 +138,15 @@ internal static class LeakTestCompositionHelper
             var tstr = await op.Dut.QueryTextAsync("GetDev_T", null, ct);
             tvalue.Append($"{v},{tstr};");
             samples.Add(v);
-            var remaining = (int)(seconds - (DateTime.Now - t0).TotalSeconds);
+            var elapsed = (DateTime.Now - t0).TotalSeconds;
+            ctx.ReportSample(elapsed, v);
+            var remaining = (int)(seconds - elapsed);
             if (remaining != lastReported && remaining % 5 == 0 && remaining > 0)
             {
                 op.UpdateLastReport($"采样中... 剩余{remaining}s");
                 lastReported = remaining;
             }
-            if ((DateTime.Now - t0).TotalSeconds > seconds) break;
+            if (elapsed > seconds) break;
             await Task.Delay(SampleIntervalMs, ct);
         }
         op.Report($"采样完成（{seconds:0}s）");

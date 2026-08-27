@@ -104,22 +104,14 @@ public static class InfrastructureServiceCollectionExtensions
     public static void EnsurePcbaDatabase(this IServiceProvider provider)
     {
         var factory = provider.GetRequiredService<IDbContextFactory<ResultDbContext>>();
-        var schema = provider.GetRequiredService<ResultStoreOptions>().ResolvedSchema;
         using var db = factory.CreateDbContext();
         db.Database.EnsureCreated();
         try
         {
-            // 触一下当前 schema 的关键列；缺表/缺列（旧库）→ 重建（仿真数据，可接受）。
-            if (schema == ResultSchema.Product)
-            {
-                _ = db.ProductTestData.Select(x => new { x.Id, x.IsAllCompleted, x.TestTypeClass }).FirstOrDefault();
-                _ = db.ProductTestDataDetails.Select(x => new { x.TaskId, x.TestItemDesc, x.TestItemConditions }).FirstOrDefault();
-            }
-            else
-            {
-                _ = db.TestData.Select(x => new { x.StartTime, x.EndTime, x.IsRePressed }).FirstOrDefault();
-                _ = db.TestDataDetails.Select(x => new { x.TestItemDesc, x.TestItemConditions }).FirstOrDefault();
-            }
+            // 触一下 product 表的关键列（含新增列：total_items/updateTime、result_data/test_item_parameters/update_time）；
+            // 缺表/缺列（旧库）→ 重建（仿真数据，可接受）。
+            _ = db.ProductTestData.Select(x => new { x.Id, x.TotalItems, x.UpdateTime }).FirstOrDefault();
+            _ = db.ProductTestDataDetails.Select(x => new { x.TaskId, x.ResultData, x.TestItemParameters, x.UpdateTime }).FirstOrDefault();
         }
         catch
         {

@@ -21,73 +21,12 @@ public static class ResultWriter
         WriteSessionAsync(db, result, new ResultStoreOptions(), ct);
 
     /// <summary>
-    /// 按结果 schema 写入会话。Product schema 先建立 ID=TaskId 的主表，再用同一 ID 写所有详情。
+    /// 写入一次测试会话：主表按 TaskId 建/更新一条，明细表逐项写入。
     /// </summary>
     public static async Task WriteSessionAsync(ResultDbContextBase db, TestSessionResult result,
         ResultStoreOptions options, CancellationToken ct = default)
     {
-        if (options.ResolvedSchema == ResultSchema.Product)
-        {
-            await WriteProductAsync(db, result, options, ct);
-            return;
-        }
-
-        await WritePcbaAsync(db, result, ct);
-    }
-
-    private static async Task WritePcbaAsync(ResultDbContextBase db, TestSessionResult result, CancellationToken ct)
-    {
-        foreach (var pos in result.Positions)
-        {
-            var sn = pos.SerialNumber ?? "";
-
-            // 子表：每个测试项一行（SN + 测试项维度）
-            foreach (var rec in pos.Steps)
-            {
-                db.TestDataDetails.Add(new PcbaTestDataDetail
-                {
-                    TaskId = result.TaskId,
-                    DeviceSn = sn,
-                    TestItemCode = rec.Step.Key,
-                    TestItemName = rec.Step.Name,
-                    TestItemDesc = rec.Step.Description,
-                    TestItemConditions = SerializeConditions(rec.Step.Conditions),
-                    TestProcessInfos = rec.ProcessInfos,
-                    TestProcessData = rec.ProcessData,
-                    ResultStatus = rec.Result.Status.ToString(),
-                    ErrorMessage = rec.Result.IsPass ? null : (rec.Result.Detail ?? rec.Result.Summary),
-                    StartTime = rec.StartedAt,
-                    EndTime = rec.FinishedAt,
-                    Operator = result.Operator,
-                });
-            }
-
-            // 主表：仅跑全部测试项时，按 SN 记录或更新
-            if (result.FullRun && !string.IsNullOrEmpty(sn))
-            {
-                var posStart = pos.Steps.Count > 0 ? pos.Steps.Min(s => s.StartedAt) : result.StartedAt;
-                var posEnd = pos.Steps.Count > 0 ? pos.Steps.Max(s => s.FinishedAt) : result.FinishedAt;
-
-                var main = await db.TestData.FirstOrDefaultAsync(x => x.DeviceSn == sn, ct);
-                if (main is null)
-                {
-                    main = new PcbaTestData { DeviceSn = sn, StartTime = posStart };  // 第一次开始时间
-                    db.TestData.Add(main);
-                }
-
-                main.BatchNo = result.BatchNo;
-                main.DeviceModel = result.DeviceModel;
-                main.StationNo = result.StationNo;
-                main.IsPass = pos.Passed;
-                // 重压重测会话 → 标记该 SN 已重压；一旦标记保持为真（首测不清除）
-                main.IsRePressed |= result.IsRePress;
-                main.Operator = result.Operator;
-                if (posEnd > main.EndTime)
-                {
-                    main.EndTime = posEnd;                     // 最后一次结束时间
-                }
-            }
-        }
+        await WriteProductAsync(db, result, options, ct);
     }
 
     private static async Task WriteProductAsync(ResultDbContextBase db, TestSessionResult result,
@@ -126,6 +65,7 @@ public static class ResultWriter
         main.IsAllCompleted = allCompleted;
         main.IsOncePass = allStepsPassed && !result.IsRePress;
         main.IsFinalPass = allStepsPassed;
+        main.TotalItems = actualStepCount;
         main.TimeConsume = Math.Max(0, (end - start).TotalSeconds);
         main.EndTime = end;
         main.Operator = result.Operator;
@@ -141,13 +81,15 @@ public static class ResultWriter
                     TestItemCode = rec.Step.Key,
                     TestItemName = rec.Step.Name,
                     TestItemDesc = rec.Step.Description,
+                    TestItemParameters = SerializeParameters(rec.Step.Parameters),
                     TestItemConditions = SerializeConditions(rec.Step.Conditions),
                     TestProcessInfos = rec.ProcessInfos,
                     TestProcessData = rec.ProcessData,
                     ResultStatus = rec.Result.Status.ToString(),
+                    ResultData = SerializeResultData(rec.Result),
                     ErrorMessage = rec.Result.IsPass ? null : (rec.Result.Detail ?? rec.Result.Summary),
                     StartTime = rec.StartedAt,
-                    EndTime = rec.FinishedAt,
+                    EndTime = rec.FinishedAt == default ? null : rec.FinishedAt,
                     Operator = result.Operator,
                 });
             }
@@ -159,4 +101,22 @@ public static class ResultWriter
 
     private static string? SerializeConditions(IReadOnlyList<ConditionDescriptor> conditions) =>
         conditions.Count == 0 ? null : JsonSerializer.Serialize(conditions);
+
+    /// <summary>
+    /// 测试项参数 JSON（test_item_parameters）：参数名/值/单位列表；无参数返回 null。
+    /// </summary>
+    private static string? SerializeParameters(IReadOnlyList<ParameterDescriptor> parameters) =>
+        parameters.Count == 0 ? null : JsonSerializer.Serialize(parameters);
+
+    /// <summary>
+    /// 测试结果数据 JSON（result_data）：结果结论/摘要/测量值/明细，与产品库明细表注释的约定结构一致。
+    /// </summary>
+    private static string? SerializeResultData(StepResult result) =>
+        JsonSerializer.Serialize(new
+        {
+            outcome = result.IsPass,
+            summary = result.Summary,
+            measuredValue = result.MeasuredValue,
+            detail = result.Detail,
+        });
 }

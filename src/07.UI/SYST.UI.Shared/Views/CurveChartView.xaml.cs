@@ -10,6 +10,7 @@ namespace SYST.UI.Shared.Views;
 
 /// <summary>
 /// 轻量多通道折线图：把 <see cref="ProcessDataSeries"/>（共享时间轴 + 每通道一组值）画成曲线。
+/// 各通道曲线相互独立：每个通道按自己的量程绘制，右侧各配一条独立纵轴（量程不同互不影响）。
 /// 实时模式下 Series 随采样点不断替换 → 自动重绘，曲线随之增长。
 /// 支持鼠标交互：滚轮缩放（以光标为中心）、左键拖拽平移、悬停查看各点数据值、双击复位。
 /// </summary>
@@ -40,7 +41,13 @@ public partial class CurveChartView : UserControl
 
     // ===== 最近一次绘制的坐标变换（供悬停反算屏幕坐标）=====
 
-    private double _left, _top, _plotW, _plotH, _yMin, _yMax;
+    private double _left, _top, _plotW, _plotH;
+
+    /// <summary>各通道独立 Y 范围（可视窗口内，下界），供曲线绘制与悬停使用。</summary>
+    private double[] _chYMin = [];
+
+    /// <summary>各通道独立 Y 范围（可视窗口内，上界），供曲线绘制与悬停使用。</summary>
+    private double[] _chYMax = [];
 
     /// <summary>本次是否已成功绘出图（有有效变换）。</summary>
     private bool _hasPlot;
@@ -162,7 +169,9 @@ public partial class CurveChartView : UserControl
             return;
         }
 
-        const double left = 46, right = 12, top = 24, bottom = 22;
+        const double left = 46, top = 24, bottom = 22;
+        var chCount = s!.Channels.Count;
+        var right = 12 + chCount * 48; // 右侧留空给各通道 Y 轴刻度
         var plotW = w - left - right;
         var plotH = h - top - bottom;
 
@@ -178,71 +187,63 @@ public partial class CurveChartView : UserControl
             }
         }
 
-        // Y 范围只统计可视窗口内的采样点（配合 X 缩放，纵向也自适应）
-        double yMin = double.MaxValue, yMax = double.MinValue;
+        // 每通道独立计算可视窗口内的 Y 范围（各曲线量程互不影响）
         var n0 = s!.TimeSec.Count;
-        for (var i = 0; i < n0; i++)
+        _chYMin = new double[chCount];
+        _chYMax = new double[chCount];
+        for (var c = 0; c < chCount; c++)
         {
-            var t = s.TimeSec[i];
-            if (t < xMin || t > xMax)
+            var ch = s.Channels[c];
+            var n = Math.Min(ch.Values.Count, n0);
+            double mn = double.MaxValue, mx = double.MinValue;
+            for (var i = 0; i < n; i++)
             {
-                continue;
-            }
-
-            foreach (var ch in s.Channels)
-            {
-                if (i >= ch.Values.Count)
+                var t = s.TimeSec[i];
+                if (t < xMin || t > xMax)
                 {
                     continue;
                 }
 
                 var v = ch.Values[i];
-                if (v < yMin)
-                {
-                    yMin = v;
-                }
-
-                if (v > yMax)
-                {
-                    yMax = v;
-                }
+                if (v < mn) { mn = v; }
+                if (v > mx) { mx = v; }
             }
-        }
 
-        if (yMin == double.MaxValue)
-        {
-            // 窗口内无点（极端情况）：退回全体范围
-            foreach (var ch in s.Channels)
+            if (mn == double.MaxValue)
             {
+                // 窗口内无点（极端情况）：退回该通道全体范围
                 foreach (var v in ch.Values)
                 {
-                    if (v < yMin) { yMin = v; }
-                    if (v > yMax) { yMax = v; }
+                    if (v < mn) { mn = v; }
+                    if (v > mx) { mx = v; }
                 }
             }
-        }
 
-        if (yMax <= yMin) { yMin -= 0.5; yMax += 0.5; }
-        var padY = (yMax - yMin) * 0.08;
-        yMin -= padY; yMax += padY;
+            if (mx <= mn) { mn -= 0.5; mx += 0.5; }
+            var padY = (mx - mn) * 0.08;
+            _chYMin[c] = mn - padY;
+            _chYMax[c] = mx + padY;
+        }
 
         // 保存变换供悬停使用
         _left = left; _top = top; _plotW = plotW; _plotH = plotH;
-        _viewXMin = xMin; _viewXMax = xMax; _yMin = yMin; _yMax = yMax;
+        _viewXMin = xMin; _viewXMax = xMax;
         _hasPlot = true;
 
         double X(double t) => left + (t - xMin) / (xMax - xMin) * plotW;
-        double Y(double v) => top + (1 - (v - yMin) / (yMax - yMin)) * plotH;
+        // 主 Y 轴（左侧刻度 + 背景网格）取第一条曲线量程；单曲线时与旧行为一致
+        double Y0(double v) => top + (1 - (v - _chYMin[0]) / (_chYMax[0] - _chYMin[0])) * plotH;
+        double Yc(double v, int c) => top + (1 - (v - _chYMin[c]) / (_chYMax[c] - _chYMin[c])) * plotH;
 
         // 坐标轴
         AddLine(left, top, left, top + plotH, "#BBB", 1);
         AddLine(left, top + plotH, left + plotW, top + plotH, "#BBB", 1);
 
-        // Y 网格 + 刻度（4 等分）
+        // 主 Y 网格 + 刻度（4 等分，基于第一条曲线量程）
         for (var i = 0; i <= 4; i++)
         {
-            var val = yMin + (yMax - yMin) * i / 4;
-            var py = Y(val);
+            var val = _chYMin[0] + (_chYMax[0] - _chYMin[0]) * i / 4;
+            var py = Y0(val);
             if (!double.IsNaN(py))
             {
                 AddLine(left, py, left + plotW, py, "#F0F0F0", 1);
@@ -250,10 +251,10 @@ public partial class CurveChartView : UserControl
             }
         }
         // X 起止刻度
-        AddText($"{xMin:0.#}", left, top + plotH + 3, "#888", 10);
-        AddText($"{xMax:0.#}", left + plotW - 26, top + plotH + 3, "#888", 10);
+        AddText($"{xMin:0.#}s", left, top + plotH + 3, "#888", 10);
+        AddText($"{xMax:0.#}s", left + plotW - 30, top + plotH + 3, "#888", 10);
 
-        // 各通道折线 + 图例
+        // 各通道折线（按各自量程）+ 图例 + 右侧独立纵轴刻度
         double legendX = left + 6;
         for (var c = 0; c < s.Channels.Count; c++)
         {
@@ -264,15 +265,13 @@ public partial class CurveChartView : UserControl
                 Stroke = brush,
                 StrokeThickness = 1.6,
                 StrokeLineJoin = PenLineJoin.Round,
-                // 缩放后窗口外的采样点会映射到绘图区左/右侧之外，裁到绘图矩形内，避免压住 Y 轴刻度/溢出
                 Clip = new RectangleGeometry(new Rect(left, top, plotW, plotH)),
             };
             var n = Math.Min(ch.Values.Count, s.TimeSec.Count);
             for (var i = 0; i < n; i++)
             {
-                poly.Points.Add(new Point(X(s.TimeSec[i]), Y(ch.Values[i])));
+                poly.Points.Add(new Point(X(s.TimeSec[i]), Yc(ch.Values[i], c)));
             }
-
             PlotCanvas.Children.Add(poly);
 
             // 图例
@@ -281,6 +280,21 @@ public partial class CurveChartView : UserControl
             PlotCanvas.Children.Add(swatch);
             AddText($"{ch.Name} ({s.Unit})", legendX + 16, 4, "#555", 11);
             legendX += 16 + (ch.Name.Length * 9) + 40;
+
+            // 右侧独立纵轴（4 等分刻度 + 刻度线），量程为该曲线在可视窗口内的范围
+            var axisX = left + plotW + 4 + c * 48;
+            for (var i = 0; i <= 4; i++)
+            {
+                var val = _chYMin[c] + (_chYMax[c] - _chYMin[c]) * i / 4;
+                var py = Yc(val, c);
+                if (double.IsNaN(py))
+                {
+                    continue;
+                }
+
+                AddLine(axisX - 3, py, axisX + 3, py, brush, 1);
+                AddText(val.ToString("0.###", CultureInfo.InvariantCulture), axisX + 5, py - 8, brush, 9);
+            }
         }
     }
 
@@ -436,7 +450,7 @@ public partial class CurveChartView : UserControl
         }
 
         double X(double v) => _left + (v - _viewXMin) / (_viewXMax - _viewXMin) * _plotW;
-        double Y(double v) => _top + (1 - (v - _yMin) / (_yMax - _yMin)) * _plotH;
+        double Yc(double v, int c) => _top + (1 - (v - _chYMin[c]) / (_chYMax[c] - _chYMin[c])) * _plotH;
 
         var px = X(s.TimeSec[best]);
 
@@ -449,10 +463,10 @@ public partial class CurveChartView : UserControl
             StrokeDashArray = new DoubleCollection { 3, 3 },
         });
 
-        // 浮层文本：X 值 + 各通道值
+        // 浮层文本：时间 + 各通道值
         var lines = new List<(string Text, Brush Brush)>
         {
-            ($"x = {s.TimeSec[best]:0.###}", (Brush)new BrushConverter().ConvertFromString("#666")!),
+            ($"t = {s.TimeSec[best]:0.###}s", (Brush)new BrushConverter().ConvertFromString("#666")!),
         };
         for (var c = 0; c < s.Channels.Count; c++)
         {
@@ -473,7 +487,7 @@ public partial class CurveChartView : UserControl
                 Stroke = Brushes.White, StrokeThickness = 1,
             };
             Canvas.SetLeft(dot, px - r);
-            Canvas.SetTop(dot, Y(val) - r);
+            Canvas.SetTop(dot, Yc(val, c) - r);
             OverlayCanvas.Children.Add(dot);
 
             lines.Add(($"{ch.Name}: {val.ToString("0.###", CultureInfo.InvariantCulture)} {s.Unit}", brush));
@@ -537,9 +551,9 @@ public partial class CurveChartView : UserControl
     /// <param name="y2">终点 Y。</param>
     /// <param name="color">颜色（十六进制串）。</param>
     /// <param name="thick">线宽。</param>
-    private void AddLine(double x1, double y1, double x2, double y2, string color, double thick)
+    private void AddLine(double x1, double y1, double x2, double y2, string color, double thick, bool dashed = false)
     {
-        PlotCanvas.Children.Add(new Line
+        var line = new Line
         {
             X1 = x1,
             Y1 = y1,
@@ -547,7 +561,23 @@ public partial class CurveChartView : UserControl
             Y2 = y2,
             Stroke = (Brush)new BrushConverter().ConvertFromString(color)!,
             StrokeThickness = thick,
-        });
+        };
+        if (dashed)
+        {
+            line.StrokeDashArray = new DoubleCollection { 4, 3 };
+        }
+        PlotCanvas.Children.Add(line);
+    }
+
+    private void AddLine(double x1, double y1, double x2, double y2, Brush brush, double thick, bool dashed = false)
+    {
+        var line = new Line
+        {
+            X1 = x1, Y1 = y1, X2 = x2, Y2 = y2,
+            Stroke = brush, StrokeThickness = thick,
+        };
+        if (dashed) line.StrokeDashArray = new DoubleCollection { 4, 3 };
+        PlotCanvas.Children.Add(line);
     }
 
     /// <summary>
@@ -566,6 +596,13 @@ public partial class CurveChartView : UserControl
             FontSize = size,
             Foreground = (Brush)new BrushConverter().ConvertFromString(color)!,
         };
+        Canvas.SetLeft(tb, x); Canvas.SetTop(tb, y);
+        PlotCanvas.Children.Add(tb);
+    }
+
+    private void AddText(string text, double x, double y, Brush brush, double size)
+    {
+        var tb = new TextBlock { Text = text, FontSize = size, Foreground = brush };
         Canvas.SetLeft(tb, x); Canvas.SetTop(tb, y);
         PlotCanvas.Children.Add(tb);
     }

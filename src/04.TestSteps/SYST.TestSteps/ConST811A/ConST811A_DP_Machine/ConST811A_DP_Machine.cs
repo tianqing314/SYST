@@ -7,9 +7,8 @@ using SYST.Devices.Abstractions;
 namespace SYST.TestSteps.ConST811A.ConST811A_DP_Machine;
 
 /// <summary>
-/// ConST811A 主板（设备族 ConST811A）测试**设备特有**处理器集合。**自动转换**自旧
-/// <c>ConST811A_MainBoard_Auto.cs</c> 的测试方法与 <c>.distributed.json</c> 任务配置：继电器指令序列
-/// （GZP21/P06 共享设备）、电压/电流读数、被检指令与 Range 判定。
+/// ConST811A 主板（设备族 ConST811A）测试处理器集合。
+/// 继电器指令序列（GZP21/P06 共享设备）、电压/电流读数、被检指令与 Range 判定。
 /// 工装用 <see cref="IMachineTestTool"/>，被检用 <see cref="IConST811ADut"/>。
 /// </summary>
 internal sealed class ConST811AOps
@@ -66,39 +65,6 @@ internal sealed class ConST811AOps
     /// <summary>读 DAM6803D 某通道电压。PORT: DSTB.GetVoltageMeasureValue。</summary>
     public Task<double> ReadVolt(int channel) => P06.ReadVoltageAsync(channel, _ct);
     public Task<double> ReadCurrent(int channel) => P06.ReadCurrentAsync(channel, _ct);
-    /// <summary>回放旧平台中可直接映射的 P21/GZP21/P06 调用；复杂上下文参数不在此层猜测。</summary>
-    public async Task ExecuteLegacyAsync(IReadOnlyList<string> calls, CancellationToken ct)
-    {
-        foreach (var call in calls)
-        {
-            var p = call.Split('|', 3);
-            if (p.Length < 2) continue;
-            var device = p[0];
-            var method = p[1];
-            var arg = p.Length == 3 ? p[2] : "";
-            IReadOnlyList<string>? args = string.IsNullOrWhiteSpace(arg) ? null : new[] { arg.Trim() };
-            if (device == "GZP21")
-            {
-                var open = !arg.Contains("Close", StringComparison.OrdinalIgnoreCase);
-                var outputName = method.Replace("Set", "").Replace("State", "");
-                await Gzp21.SetOutputAsync(outputName, open, ct);
-                continue;
-            }
-            if (device == "P21")
-            {
-                if (method.StartsWith("Get", StringComparison.OrdinalIgnoreCase) || method.StartsWith("Is", StringComparison.OrdinalIgnoreCase))
-                    _ = await Dut.QueryTextAsync(method, args, ct);
-                else
-                    await Dut.CommandAsync(method, args, ct);
-            }
-            else if (device == "P06")
-            {
-                if (method.Contains("Voltage", StringComparison.OrdinalIgnoreCase)) _ = await P06.ReadVoltageAsync(0, ct);
-                else if (method.Contains("Current", StringComparison.OrdinalIgnoreCase)) _ = await P06.ReadCurrentAsync(0, ct);
-            }
-        }
-    }
-
     /// <summary>按名取条件（找不到返回 null）。</summary>
     public ConditionDescriptor? Cond(string name)
     {

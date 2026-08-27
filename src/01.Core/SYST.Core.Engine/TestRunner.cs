@@ -87,6 +87,19 @@ public sealed class SampleEventArgs : EventArgs
 }
 
 /// <summary>
+/// 批量过程数据事件参数（步骤结束时 RecordProcessData 产生）。
+/// </summary>
+public sealed class ProcessDataRecordedEventArgs : EventArgs
+{
+    /// <summary>号位序号。</summary>
+    public required int PositionIndex { get; init; }
+    /// <summary>所属测试项 Key。</summary>
+    public required string StepKey { get; init; }
+    /// <summary>完整过程数据序列。</summary>
+    public required ProcessDataSeries Data { get; init; }
+}
+
+/// <summary>
 /// 实时消息事件参数。
 /// </summary>
 public sealed class RealtimeMessageEventArgs : EventArgs
@@ -326,6 +339,11 @@ public sealed class TestRunner
     public event EventHandler<SampleEventArgs>? SampleReported;
 
     /// <summary>
+    /// 批量过程数据已记录（步骤结束时 RecordProcessData 产生的数据，供 UI 曲线展示）。
+    /// </summary>
+    public event EventHandler<ProcessDataRecordedEventArgs>? ProcessDataRecorded;
+
+    /// <summary>
     /// 人工确认请求事件（<c>StepType=Manual</c> 的测试项）：暂停该号位，发布确认请求，
     /// 等待 UI 弹确认框回传 OK/NG；不阻塞其他号位。整机模板订阅弹 <c>ManualConfirmDialog</c>。
     /// </summary>
@@ -545,6 +563,16 @@ public sealed class TestRunner
                     ? System.Text.Json.JsonSerializer.Serialize(pd, ProcessDataJson)
                     : null,
             });
+            // 累积过程数据（含多次循环全部通道）通知 UI 展示曲线
+            if (ctx.AccumulatedProcessData is { Channels.Count: > 0 } pdUi)
+            {
+                ProcessDataRecorded?.Invoke(this, new ProcessDataRecordedEventArgs
+                {
+                    PositionIndex = pos.Index,
+                    StepKey = step.Key,
+                    Data = pdUi,
+                });
+            }
             if (!result.IsPass && result.Outcome != StepOutcome.Skip)
             {
                 posPassed = false;

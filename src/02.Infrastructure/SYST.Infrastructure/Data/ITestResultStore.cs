@@ -246,60 +246,7 @@ public sealed class EfTestResultStore : ITestResultStore
     public async Task<TestDataPage> QueryMainAsync(TestRecordFilter filter, int page, int pageSize, bool useRemote = false, CancellationToken ct = default)
     {
         await using var db = await CreateQueryDbAsync(useRemote, ct);
-        if (_options.ResolvedSchema == ResultSchema.Product)
-        {
-            return await QueryProductMainAsync(db, filter, page, pageSize, ct);
-        }
-
-        var q = db.TestData.AsQueryable();
-        if (filter.From is { } f)
-        {
-            q = q.Where(x => x.EndTime >= f);
-        }
-
-        if (filter.To is { } t)
-        {
-            q = q.Where(x => x.EndTime <= t);
-        }
-
-        if (!string.IsNullOrWhiteSpace(filter.BatchNo))
-        {
-            q = q.Where(x => x.BatchNo == filter.BatchNo);
-        }
-
-        if (filter.IsPass is { } p)
-        {
-            q = q.Where(x => x.IsPass == p);
-        }
-
-        // 只看当前测试页对应的被检型号——不同板卡的数据互不串台
-        if (!string.IsNullOrWhiteSpace(filter.DeviceModel))
-        {
-            q = q.Where(x => x.DeviceModel == filter.DeviceModel);
-        }
-
-        var total = await q.CountAsync(ct);
-        if (page < 1)
-        {
-            page = 1;
-        }
-
-        if (pageSize < 1)
-        {
-            pageSize = 20;
-        }
-
-        if (pageSize > 100)
-        {
-            pageSize = 100;
-        }
-
-        var items = await q.OrderByDescending(x => x.EndTime)
-            .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(x => new MainTestRecord(x.DeviceSn, x.BatchNo, x.DeviceModel, x.StationNo,
-                x.IsPass, x.IsRePressed, x.Operator, x.StartTime, x.EndTime))
-            .ToListAsync(ct);
-        return new TestDataPage(items, total);
+        return await QueryProductMainAsync(db, filter, page, pageSize, ct);
     }
 
     private static async Task<TestDataPage> QueryProductMainAsync(ResultDbContextBase db, TestRecordFilter filter,
@@ -334,28 +281,13 @@ public sealed class EfTestResultStore : ITestResultStore
     public async Task<IReadOnlyList<StoredStepDetail>> GetStepsBySnAsync(string deviceSn, bool useRemote = false, CancellationToken ct = default)
     {
         await using var db = await CreateQueryDbAsync(useRemote, ct);
-        if (_options.ResolvedSchema == ResultSchema.Product)
-        {
-            var productRows = await db.ProductTestDataDetails
-                .Where(d => d.DeviceSn == deviceSn).ToListAsync(ct);
-            return productRows.GroupBy(d => d.TestItemCode)
-                .Select(g => g.OrderByDescending(d => d.EndTime).First())
-                .OrderBy(d => d.StartTime)
-                .Select(d => new StoredStepDetail(d.TestItemName, d.ResultStatus ?? "", d.TestProcessInfos,
-                    d.TestProcessData, d.ErrorMessage, d.StartTime, d.EndTime, d.TestItemCode))
-                .ToList();
-        }
-
-        // 同一测试项可能多次（重测），取每个代码最近一次
-        var rows = await db.TestDataDetails
-            .Where(d => d.DeviceSn == deviceSn)
-            .ToListAsync(ct);
-        return rows
-            .GroupBy(d => d.TestItemCode)
+        var productRows = await db.ProductTestDataDetails
+            .Where(d => d.DeviceSn == deviceSn).ToListAsync(ct);
+        return productRows.GroupBy(d => d.TestItemCode)
             .Select(g => g.OrderByDescending(d => d.EndTime).First())
             .OrderBy(d => d.StartTime)
-            .Select(d => new StoredStepDetail(d.TestItemName, d.ResultStatus, d.TestProcessInfos,
-                d.TestProcessData, d.ErrorMessage, d.StartTime, d.EndTime, d.TestItemCode))
+            .Select(d => new StoredStepDetail(d.TestItemName, d.ResultStatus ?? "", d.TestProcessInfos,
+                d.TestProcessData, d.ErrorMessage, d.StartTime, d.EndTime ?? d.StartTime, d.TestItemCode))
             .ToList();
     }
 
@@ -374,22 +306,13 @@ public sealed class EfTestResultStore : ITestResultStore
         }
 
         await using var db = await CreateQueryDbAsync(useRemote, ct);
-        if (_options.ResolvedSchema == ResultSchema.Product)
-        {
-            var productDetails = await db.ProductTestDataDetails
-                .Where(d => d.DeviceSn == deviceSn).ExecuteDeleteAsync(ct);
-            var productMain = await db.ProductTestData
-                .Where(x => x.DeviceSn == deviceSn).ExecuteDeleteAsync(ct);
-            _logger.LogWarning("删除测试记录：SN={Sn}，数据源={Source}，主表 {Main} 行，详情 {Details} 行，操作员={Operator}。",
-                deviceSn, useRemote ? "远程MySQL" : "本地SQLite", productMain, productDetails, _session.Operator);
-            return new DeletedRecordCount(productMain, productDetails);
-        }
-
-        var details = await db.TestDataDetails.Where(d => d.DeviceSn == deviceSn).ExecuteDeleteAsync(ct);
-        var main = await db.TestData.Where(x => x.DeviceSn == deviceSn).ExecuteDeleteAsync(ct);
+        var productDetails = await db.ProductTestDataDetails
+            .Where(d => d.DeviceSn == deviceSn).ExecuteDeleteAsync(ct);
+        var productMain = await db.ProductTestData
+            .Where(x => x.DeviceSn == deviceSn).ExecuteDeleteAsync(ct);
         _logger.LogWarning("删除测试记录：SN={Sn}，数据源={Source}，主表 {Main} 行，详情 {Details} 行，操作员={Operator}。",
-            deviceSn, useRemote ? "远程MySQL" : "本地SQLite", main, details, _session.Operator);
-        return new DeletedRecordCount(main, details);
+            deviceSn, useRemote ? "远程MySQL" : "本地SQLite", productMain, productDetails, _session.Operator);
+        return new DeletedRecordCount(productMain, productDetails);
     }
 
     /// <summary>
@@ -402,25 +325,13 @@ public sealed class EfTestResultStore : ITestResultStore
     public async Task<StoredStepDetail?> GetLatestStepAsync(string deviceSn, string testItemCode, CancellationToken ct = default)
     {
         await using var db = await _factory.CreateDbContextAsync(ct);
-        if (_options.ResolvedSchema == ResultSchema.Product)
-        {
-            var productRow = await db.ProductTestDataDetails
-                .Where(d => d.DeviceSn == deviceSn && d.TestItemCode == testItemCode)
-                .OrderByDescending(d => d.EndTime).FirstOrDefaultAsync(ct);
-            return productRow is null
-                ? null
-                : new StoredStepDetail(productRow.TestItemName, productRow.ResultStatus ?? "",
-                    productRow.TestProcessInfos, productRow.TestProcessData, productRow.ErrorMessage,
-                    productRow.StartTime, productRow.EndTime, productRow.TestItemCode);
-        }
-
-        var row = await db.TestDataDetails
+        var productRow = await db.ProductTestDataDetails
             .Where(d => d.DeviceSn == deviceSn && d.TestItemCode == testItemCode)
-            .OrderByDescending(d => d.EndTime)
-            .FirstOrDefaultAsync(ct);
-        return row is null
+            .OrderByDescending(d => d.EndTime).FirstOrDefaultAsync(ct);
+        return productRow is null
             ? null
-            : new StoredStepDetail(row.TestItemName, row.ResultStatus, row.TestProcessInfos,
-                row.TestProcessData, row.ErrorMessage, row.StartTime, row.EndTime);
+            : new StoredStepDetail(productRow.TestItemName, productRow.ResultStatus ?? "",
+                productRow.TestProcessInfos, productRow.TestProcessData, productRow.ErrorMessage,
+                productRow.StartTime, productRow.EndTime ?? productRow.StartTime, productRow.TestItemCode);
     }
 }

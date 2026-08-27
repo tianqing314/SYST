@@ -8,9 +8,8 @@ using SYST.Devices.Abstractions;
 namespace SYST.TestSteps.ConST811A.ConST811A_MP_Machine;
 
 /// <summary>
-/// ConST811A 主板（设备族 ConST811A）测试**设备特有**处理器集合。**自动转换**自旧
-/// <c>ConST811A_MainBoard_Auto.cs</c> 的测试方法与 <c>.distributed.json</c> 任务配置：继电器指令序列
-/// （GZP21 共享工装）、被检指令与 Range 判定。表绝压版不接 P06/ConST810 标准模块（电压/电流采样）。
+/// ConST811A 主板（设备族 ConST811A）测试处理器集合。
+/// 继电器指令序列（GZP21 共享工装）、被检指令与 Range 判定。表绝压版不接 P06/ConST810 标准模块。
 /// 工装用 <see cref="IMachineTestTool"/>，被检用 <see cref="IConST811ADut"/>。
 /// </summary>
 internal sealed class ConST811AOps
@@ -53,39 +52,6 @@ internal sealed class ConST811AOps
     {
         Report($"工装输出指令：{cmd}");
         return Gzp21.SetOutputAsync(cmd, true, _ct);
-    }
-
-    /// <summary>回放旧平台中可直接映射的 P21/GZP21 调用；复杂上下文参数不在此层猜测。</summary>
-    public async Task ExecuteLegacyAsync(IReadOnlyList<string> calls, CancellationToken ct)
-    {
-        foreach (var call in calls)
-        {
-            var p = call.Split('|', 3);
-            if (p.Length < 2) continue;
-            var device = p[0];
-            var method = p[1];
-            var arg = p.Length == 3 ? p[2] : "";
-            IReadOnlyList<string>? args = string.IsNullOrWhiteSpace(arg) ? null : new[] { arg.Trim() };
-            if (device == "GZP21")
-            {
-                var open = !arg.Contains("Close", StringComparison.OrdinalIgnoreCase);
-                var outputName = method.Replace("Set", "").Replace("State", "");
-                await Gzp21.SetOutputAsync(outputName, open, ct);
-                continue;
-            }
-            if (device == "P21")
-            {
-                if (method.StartsWith("Get", StringComparison.OrdinalIgnoreCase) || method.StartsWith("Is", StringComparison.OrdinalIgnoreCase))
-                    _ = await Dut.QueryTextAsync(method, args, ct);
-                else
-                    await Dut.CommandAsync(method, args, ct);
-            }
-            else if (device == "P06")
-            {
-                // 表绝压版不接 P06 标准模块；旧脚本遗留的 P06 电压/电流调用按跳过处理（无采样设备）
-                Report($"跳过 P06 调用：{method}（本机型未配置 P06 标准模块）", RealtimeLevel.Warn);
-            }
-        }
     }
 
     /// <summary>按名取条件（找不到返回 null）。</summary>
@@ -276,6 +242,7 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
         // 旧 while(true) 30 秒轮询：每 150ms 读 IPM + Dev_T，append tvalue + P1s（规则5：保留轮询循环）
         {
             var neg30SStart = DateTime.Now;
+            ctx.BeginSampling("kPa", "负压模块压力");
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
@@ -289,6 +256,7 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
                 if (tstr is null) { pass = false; break; }
                 tvalue.Append($"{infoVal},{tstr};");
                 P1s.Add(infoVal);
+                ctx.ReportSample((DateTime.Now - neg30SStart).TotalSeconds, infoVal);
                 if ((DateTime.Now - neg30SStart).TotalSeconds > 30) break;
                 await op.Sleep(150);
             }
@@ -387,6 +355,7 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
         // 旧 while(true) 30 秒轮询：每 150ms 读 IPM + Dev_T，append tvalue + P2s（规则5）
         {
             var pos30SStart = DateTime.Now;
+            ctx.BeginSampling("kPa", "正压模块压力");
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
@@ -400,6 +369,7 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
                 if (tstr is null) { pass = false; break; }
                 tvalue.Append($"{infoVal},{tstr};");
                 P2s.Add(infoVal);
+                ctx.ReportSample((DateTime.Now - pos30SStart).TotalSeconds, infoVal);
                 if ((DateTime.Now - pos30SStart).TotalSeconds > 30) break;
                 await op.Sleep(150);
             }
@@ -470,22 +440,22 @@ public sealed class LeakTestComposition_Low_MPConST811AHandler : IStepHandler
 
         ctx.RecordProcessData(new ProcessDataSeries {
             StartedAt = DateTime.Now,
-            TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+            TimeSec = Enumerable.Range(0, VP1s.Count).Select(i => i * 0.5).ToArray(),
             Channels = new[] { new ProcessChannel("负压控压压力变化", VP1s.ToArray()) }
         });
         ctx.RecordProcessData(new ProcessDataSeries {
             StartedAt = DateTime.Now,
-            TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+            TimeSec = Enumerable.Range(0, P1s.Count).Select(i => i * 0.15).ToArray(),
             Channels = new[] { new ProcessChannel("负压泄漏压力变化", P1s.ToArray()) }
         });
         ctx.RecordProcessData(new ProcessDataSeries {
             StartedAt = DateTime.Now,
-            TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+            TimeSec = Enumerable.Range(0, VP2s.Count).Select(i => i * 0.5).ToArray(),
             Channels = new[] { new ProcessChannel("正压控压压力变化", VP2s.ToArray()) }
         });
         ctx.RecordProcessData(new ProcessDataSeries {
             StartedAt = DateTime.Now,
-            TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+            TimeSec = Enumerable.Range(0, P2s.Count).Select(i => i * 0.15).ToArray(),
             Channels = new[] { new ProcessChannel("正压压力变化", P2s.ToArray()) }
         });
         
@@ -617,6 +587,7 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
         // 旧 while(true) 30 秒轮询：每 150ms 读 IPM + Dev_T，append tvalue + P1s（规则5）
         {
             var neg30SStart = DateTime.Now;
+            ctx.BeginSampling("kPa", "负压模块压力");
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
@@ -630,6 +601,7 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
                 if (tstr is null) { pass = false; break; }
                 tvalue.Append($"{infoVal},{tstr};");
                 P1s.Add(infoVal);
+                ctx.ReportSample((DateTime.Now - neg30SStart).TotalSeconds, infoVal);
                 if ((DateTime.Now - neg30SStart).TotalSeconds > 30) break;
                 await op.Sleep(150);
             }
@@ -716,6 +688,7 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
         // 旧 while(true) 30 秒轮询：每 150ms 读 IPM + Dev_T，append tvalue + P2s（规则5）
         {
             var pos30SStart = DateTime.Now;
+            ctx.BeginSampling("kPa", "正压模块压力");
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
@@ -729,6 +702,7 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
                 if (tstr is null) { pass = false; break; }
                 tvalue.Append($"{infoVal},{tstr};");
                 P2s.Add(infoVal);
+                ctx.ReportSample((DateTime.Now - pos30SStart).TotalSeconds, infoVal);
                 if ((DateTime.Now - pos30SStart).TotalSeconds > 30) break;
                 await op.Sleep(150);
             }
@@ -814,22 +788,22 @@ public sealed class LeakTestComposition_High_MPConST811AHandler : IStepHandler
 
         ctx.RecordProcessData(new ProcessDataSeries {
             StartedAt = DateTime.Now,
-            TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+            TimeSec = Enumerable.Range(0, VP1s.Count).Select(i => i * 0.5).ToArray(),
             Channels = new[] { new ProcessChannel("负压控压压力变化", VP1s.ToArray()) }
         });
         ctx.RecordProcessData(new ProcessDataSeries {
             StartedAt = DateTime.Now,
-            TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+            TimeSec = Enumerable.Range(0, P1s.Count).Select(i => i * 0.15).ToArray(),
             Channels = new[] { new ProcessChannel("负压压力变化", P1s.ToArray()) }
         });
         ctx.RecordProcessData(new ProcessDataSeries {
             StartedAt = DateTime.Now,
-            TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+            TimeSec = Enumerable.Range(0, VP2s.Count).Select(i => i * 0.5).ToArray(),
             Channels = new[] { new ProcessChannel("正压控压压力变化", VP2s.ToArray()) }
         });
         ctx.RecordProcessData(new ProcessDataSeries {
             StartedAt = DateTime.Now,
-            TimeSec = Enumerable.Range(0, 1).Select(i => (double)i).ToArray(),
+            TimeSec = Enumerable.Range(0, P2s.Count).Select(i => i * 0.15).ToArray(),
             Channels = new[] { new ProcessChannel("正压压力变化", P2s.ToArray()) }
         });
         
@@ -932,7 +906,7 @@ public sealed class TestFlowConST811AHandler : IStepHandler
 
         ctx.RecordProcessData(new ProcessDataSeries {
             StartedAt = DateTime.Now,
-            TimeSec = Enumerable.Range(0, VP1s.Count).Select(idx => (double)idx).ToArray(),
+            TimeSec = Enumerable.Range(0, VP1s.Count).Select(idx => idx * 0.5).ToArray(),
             Channels = new[] { new ProcessChannel("控压压力变化", VP1s.ToArray()) }
         });
         op.Report(pass ? "✓ 加压流程测试通过" : "✗ 加压流程测试未通过", pass ? RealtimeLevel.Success : RealtimeLevel.Error);

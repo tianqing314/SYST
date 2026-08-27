@@ -143,6 +143,7 @@ public partial class TestRunViewModel : ObservableObject
         _runner.StepChanged += OnStepChanged;
         _runner.Message += OnMessage;
         _runner.SampleReported += OnSample;
+        _runner.ProcessDataRecorded += OnProcessDataRecorded;
         _runner.ManualConfirmRequested += OnManualConfirmRequested;
     }
 
@@ -647,6 +648,27 @@ public partial class TestRunViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 步骤结束时批量过程数据到达 → 替换为累积的全通道数据（含多次循环）。
+    /// </summary>
+    private void OnProcessDataRecorded(object? sender, ProcessDataRecordedEventArgs e)
+    {
+        _dispatcher.BeginInvoke(() =>
+        {
+            var pos = Positions.FirstOrDefault(p => p.Index == e.PositionIndex);
+            var cell = pos?.Steps.FirstOrDefault(c => string.Equals(c.Key, e.StepKey, StringComparison.OrdinalIgnoreCase));
+            if (cell is not null && e.Data is { TimeSec.Count: > 0 })
+            {
+                cell.ReplaceProcessData(e.Data);
+                if (LiveStep is null || string.Equals(LiveStep.Key, e.StepKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    LiveStep = cell;
+                    OnPropertyChanged(nameof(HasLiveCurve));
+                }
+            }
+        });
+    }
+
+    /// <summary>
     /// 遍历所有号位的所有测试项，汇总已完成步数并检查是否出现不合格/异常，
     /// 据此更新 <see cref="TaskbarProgressValue"/> 和 <see cref="TaskbarProgressState"/>。
     /// </summary>
@@ -964,24 +986,54 @@ public partial class StepCellViewModel(int positionIndex, int order, string key,
     // 实时采集累积
 
     /// <summary>
-    /// 采样时间轴累积。
+    /// 采样时间轴累积（参考轴：多批次共用，各通道按批内索引对齐）。
     /// </summary>
     private readonly List<double> _sampleTime = [];
 
     /// <summary>
-    /// 各通道采样值累积。
+    /// 各通道采样值累积（跨批次：每批采样追加一组独立通道/曲线）。
     /// </summary>
     private List<List<double>> _sampleChannels = [];
 
     /// <summary>
-    /// 采样通道名。
+    /// 采样通道名（跨批次累积）。
     /// </summary>
     private string[] _channelNames = [];
+
+    /// <summary>
+    /// 当前批次通道名（用于识别新一批采样）。
+    /// </summary>
+    private string[] _batchNames = [];
+
+    /// <summary>
+    /// 当前批次首个通道在 <see cref="_sampleChannels"/> 中的索引。
+    /// </summary>
+    private int _batchChannelStart;
+
+    /// <summary>
+    /// 当前批次通道数。
+    /// </summary>
+    private int _batchChannelCount;
+
+    /// <summary>
+    /// 当前批次已收集点数（批内索引）。
+    /// </summary>
+    private int _batchIndex;
+
+    /// <summary>
+    /// 本批上一采样点时间（用于识别新一批采样：新批次会重新计时导致时间回退）。
+    /// </summary>
+    private double _lastBatchTime;
 
     /// <summary>
     /// 采样单位。
     /// </summary>
     private string _sampleUnit = "V";
+
+    /// <summary>
+    /// 批量数据已激活（ReplaceProcessData 调用后），AddSample 不再追加点。
+    /// </summary>
+    private bool _batchDataActive;
 
     /// <summary>
     /// 最新一条过程日志（带时间前缀，单工位「过程日志」列显示）。
@@ -1015,22 +1067,95 @@ public partial class StepCellViewModel(int positionIndex, int order, string key,
 
     /// <summary>
     /// 追加一个采样点并重建曲线数据序列。
+    /// 同一测试项可能分多次采样（多次 BeginSampling，如负压段/正压段各采一段）：
+    /// 每次采样成为一组独立通道（独立曲线、各自纵轴），时间按批内索引对齐到参考轴，
+    /// 与步骤结束时批量数据（RecordProcessData 累积）的展示效果一致。
     /// </summary>
     /// <param name="e">采样参数。</param>
     public void AddSample(SampleEventArgs e)
     {
-        if (_sampleTime.Count == 0)
+        if (_batchDataActive) return; // 批量数据已接管，流式不再追加
+
+        // 新批次判定：首点、时间回退（相对本批上一采样点，新批次会重新计时）或通道名变化
+        if (_sampleTime.Count == 0 || e.TimeSec < _lastBatchTime || !_batchNames.SequenceEqual(e.ChannelNames))
         {
-            _channelNames = e.ChannelNames.ToArray();
+            _batchNames = e.ChannelNames.ToArray();
+            _batchChannelStart = _sampleChannels.Count;
+            _batchChannelCount = e.ChannelNames.Count;
+            _batchIndex = 0;
             _sampleUnit = e.Unit;
-            _sampleChannels = _channelNames.Select(_ => new List<double>()).ToList();
-        }
-        _sampleTime.Add(e.TimeSec);
-        for (var i = 0; i < _sampleChannels.Count && i < e.Values.Count; i++)
-        {
-            _sampleChannels[i].Add(e.Values[i]);
+            foreach (var name in e.ChannelNames)
+            {
+                _channelNames = [.. _channelNames, name];
+                _sampleChannels.Add(new List<double>());
+            }
         }
 
+        _lastBatchTime = e.TimeSec;
+
+        // 参考时间轴：本批索引超出参考轴时才扩展（保留本批的时间刻度）
+        if (_batchIndex >= _sampleTime.Count)
+        {
+            _sampleTime.Add(e.TimeSec);
+        }
+
+        // 值追加到本批通道
+        for (var i = 0; i < _batchChannelCount && i < e.Values.Count; i++)
+        {
+            _sampleChannels[_batchChannelStart + i].Add(e.Values[i]);
+        }
+        _batchIndex++;
+
+        RebuildProcessData();
+    }
+
+    /// <summary>
+    /// 追加批量过程数据的通道到已有曲线（RecordProcessData 每次调用追加一组通道，不覆盖）。
+    /// </summary>
+    public void SetProcessData(ProcessDataSeries data)
+    {
+        if (data.TimeSec.Count == 0 || data.Channels.Count == 0) return;
+
+        // 追加新通道到累积数组
+        foreach (var ch in data.Channels)
+        {
+            _channelNames = [.. _channelNames, ch.Name];
+            _sampleChannels.Add(ch.Values.ToList());
+        }
+        // 以最长通道为准更新时间轴
+        if (data.TimeSec.Count > _sampleTime.Count)
+        {
+            for (var i = _sampleTime.Count; i < data.TimeSec.Count; i++)
+                _sampleTime.Add(data.TimeSec[i]);
+        }
+        _sampleUnit = data.Unit ?? "V";
+        RebuildProcessData();
+    }
+
+    /// <summary>
+    /// 用累积的全通道数据替换当前曲线（步骤完成后 ProcessDataRecorded 推送）。
+    /// </summary>
+    public void ReplaceProcessData(ProcessDataSeries data)
+    {
+        if (data.TimeSec.Count == 0 || data.Channels.Count == 0) return;
+        _batchDataActive = true;
+        _sampleTime.Clear();
+        _sampleChannels = [];
+        _channelNames = [];
+        _sampleTime.AddRange(data.TimeSec);
+        _sampleUnit = data.Unit ?? "V";
+        foreach (var ch in data.Channels)
+        {
+            _channelNames = [.. _channelNames, ch.Name];
+            _sampleChannels.Add(ch.Values.ToList());
+        }
+        RebuildProcessData();
+    }
+
+    /// <summary>根据累积数组重建 ProcessDataSeries 并通知 UI。</summary>
+    private void RebuildProcessData()
+    {
+        if (_sampleTime.Count == 0 || _sampleChannels.Count == 0) { ProcessData = null; return; }
         ProcessData = new ProcessDataSeries
         {
             Unit = _sampleUnit,
@@ -1046,7 +1171,8 @@ public partial class StepCellViewModel(int positionIndex, int order, string key,
     {
         Status = "待测"; Measured = null; StatusBrush = Brushes.Gray; Details.Clear(); OnPropertyChanged(nameof(LatestLog));
         ProcessData = null; ErrorMessage = "";
-        _sampleTime.Clear(); _sampleChannels = []; _channelNames = [];
+        _sampleTime.Clear(); _sampleChannels = []; _channelNames = []; _batchDataActive = false;
+        _batchNames = []; _batchChannelStart = 0; _batchChannelCount = 0; _batchIndex = 0; _lastBatchTime = 0;
     }
 
     /// <summary>

@@ -7,7 +7,6 @@ namespace SYST.TestSteps.ConST860;
 
 /// <summary>
 /// ConST860 液压整机公共 Ops。封装被检（<see cref="IConST860Dut"/>）指令调用与日志/判定辅助。
-/// **自动转换**自旧 <c>ConST860_SelfCheckTest_Y_Task</c> / <c>ConST860_SelfCheckPro_Q_GW2_Task</c> 脚本逻辑；
 /// P25 整机测试不依赖额外标准模块。
 /// </summary>
 internal sealed class ConST860Ops

@@ -146,14 +146,6 @@ internal class ConST811AOpsBase
     }
 
     /// <summary>
-    /// 执行遗留测试逻辑（子类可重写以支持 P06 设备）。
-    /// </summary>
-    public virtual async Task<LegacyTestResult> ExecuteLegacyAsync(string testName, Func<ConST811AOpsBase, Task<LegacyTestResult>> action)
-    {
-        return await action(this);
-    }
-
-    /// <summary>
     /// 获取校准数据（子类可重写以支持 P06 设备）。
     /// </summary>
     public virtual async Task<CalibrationResult> GetCalibrationDataAsync(CalibrationMode mode, string password, int channel, int function, int range)
@@ -181,11 +173,6 @@ internal class ConST811AOpsBase
         throw new NotSupportedException("本机型未配置 P06 标准模块，无法读取电流");
     }
 }
-
-/// <summary>
-/// 遗留测试结果。
-/// </summary>
-internal sealed record LegacyTestResult(bool Pass, string Summary, double? Value = null);
 
 /// <summary>
 /// 校准结果。
